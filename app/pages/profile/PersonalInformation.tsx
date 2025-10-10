@@ -13,33 +13,35 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Entypo from '@expo/vector-icons/Entypo';
+
 const PersonalInformation = () => {
     const [profileImage, setProfileImage] = useState<string | null>(null);
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
-    const [phone, setPhone] = useState("");
-    const [editableField, setEditableField] = useState<"name" | "phone" | null>(
-        null
-    );
+    const [phone, setPhone] = useState(""); // <-- Phone state
+    const [editableField, setEditableField] = useState<"name" | "phone" | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Load user data from AsyncStorage
-    const loadUserData = async () => {
-        try {
-            const userData = await AsyncStorage.getItem("user");
+const loadUserData = async () => {
+    try {
+        const userData = await AsyncStorage.getItem("user");
 
-            if (userData) {
-                const parsedUser = JSON.parse(userData);
-                setName(parsedUser.name || "User");
-                setEmail(parsedUser.email || "Not Available");
-                setProfileImage(parsedUser.avatar || "https://i.pravatar.cc/150?img=12");
-            }
-        } catch (error) {
-            console.error("Error loading user:", error);
-        } finally {
-            setLoading(false);
+        if (userData) {
+            const parsedUser = JSON.parse(userData);
+            console.log("User Data:", parsedUser); // debug to check if phone exists
+            setName(parsedUser.name || "User");
+            setEmail(parsedUser.email || "Not Available");
+            setPhone(parsedUser.phone || ""); // <-- this will work if API/AsyncStorage includes phone
+            setProfileImage(parsedUser.avatar || "https://i.pravatar.cc/150?img=12");
         }
-    };
+    } catch (error) {
+        console.error("Error loading user:", error);
+    } finally {
+        setLoading(false);
+    }
+};
+
 
     useEffect(() => {
         loadUserData();
@@ -47,9 +49,10 @@ const PersonalInformation = () => {
 
     const handleSave = async () => {
         try {
-            const userData = { name, email, avatar: profileImage };
+            const userData = { name, email, phone, avatar: profileImage }; // <-- Include phone
             await AsyncStorage.setItem("user", JSON.stringify(userData));
             Alert.alert("Profile Saved", "Your personal information has been updated.");
+            setEditableField(null); // Disable editing after save
         } catch (error) {
             Alert.alert("Error", "Failed to save profile.");
         }
@@ -87,7 +90,7 @@ const PersonalInformation = () => {
                     style={styles.profileImage}
                 />
                 <TouchableOpacity style={styles.editProfileBtn} >
-                    <Entypo style={styles.editProfileText} name="camera" size={24} color="black" />
+                    <Entypo style={styles.editProfileText} name="camera" size={24} color="white" />
                 </TouchableOpacity>
             </View>
 

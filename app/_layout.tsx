@@ -35,6 +35,13 @@ export default function RootLayout() {
         <Stack.Screen name="pages/fundamental/overviewTabScreen" options={{ headerShown: false }} />
         <Stack.Screen name="pages/fundamental/fundamentalAnalysisTabScreen" options={{ headerShown: false }} />
         <Stack.Screen name="pages/upcomingEvents/upcomingEvents" options={{ headerShown: false }} />
+        <Stack.Screen name="pages/viewAllPages/viewAllForex" options={{ headerShown: false }} />
+        <Stack.Screen name="pages/viewAllPages/viewAllCrypto" options={{ headerShown: false }} />
+        <Stack.Screen name="pages/viewAllPages/viewAllMarketMovers" options={{ headerShown: false }} />
+        <Stack.Screen name="pages/viewAllPages/allIndices" options={{ headerShown: false }} />
+
+        
+
         {/* Auth group */}
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
 

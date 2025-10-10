@@ -19,7 +19,7 @@ const INDEXES = [
 const FMP_BATCH_QUOTE_URL = `https://financialmodelingprep.com/stable/batch-index-quotes?apikey=pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb`;
 
 export default function IndexChart() {
-  const [interval, setInterval] = useState<Interval>('1d');
+  const [interval, setInterval] = useState<Interval>('5min'); // default 5min
   const [chartsData, setChartsData] = useState<Record<string, number[]>>({});
   const [chartsLabels, setChartsLabels] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
@@ -36,42 +36,43 @@ export default function IndexChart() {
     fetchChart(selectedIndex, interval);
   }, [interval, selectedIndex]);
 
-const fetchAllQuotes = async () => {
-  try {
-    setLoading(true);
-    const response = await axios.get(FMP_BATCH_QUOTE_URL);
+  const fetchAllQuotes = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(FMP_BATCH_QUOTE_URL);
 
-    if (response.data && Array.isArray(response.data)) {
-      // response.data is an array of quote objects
-      const data = INDEXES.map(index => {
-        const quote = response.data.find((q: any) => q.symbol === index.symbol);
-        if (!quote) return {
-          symbol: index.symbol,
-          price: 0,
-          change: 0,
-          changePercent: 0,
-          trendUp: true,
-        };
+      if (response.data && Array.isArray(response.data)) {
+        const data = INDEXES.map(index => {
+          const quote = response.data.find((q: any) => q.symbol === index.symbol);
+          if (!quote)
+            return {
+              symbol: index.symbol,
+              price: 0,
+              change: 0,
+              changePercent: 0,
+              trendUp: true,
+            };
 
-        const changePercent = quote.price - quote.change !== 0 ? (quote.change / (quote.price - quote.change)) * 100 : 0;
+          const changePercent =
+            quote.price - quote.change !== 0 ? (quote.change / (quote.price - quote.change)) * 100 : 0;
 
-        return {
-          symbol: index.symbol,
-          price: quote.price ?? 0,
-          change: quote.change ?? 0,
-          changePercent,
-          trendUp: quote.change >= 0,
-        };
-      });
+          return {
+            symbol: index.symbol,
+            price: quote.price ?? 0,
+            change: quote.change ?? 0,
+            changePercent,
+            trendUp: quote.change >= 0,
+          };
+        });
 
-      setQuotes(data);
+        setQuotes(data);
+      }
+    } catch (e) {
+      console.error('Error fetching quotes:', e);
+    } finally {
+      setLoading(false);
     }
-  } catch (e) {
-    console.error('Error fetching quotes:', e);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchChart = async (symbol: string, selectedInterval: Interval) => {
     try {
@@ -97,13 +98,14 @@ const fetchAllQuotes = async () => {
     }
   };
 
-  const currentQuote = quotes.find(q => q.symbol === selectedIndex) ?? {
-    symbol: selectedIndex,
-    price: 0,
-    change: 0,
-    changePercent: 0,
-    trendUp: true,
-  };
+  const currentQuote =
+    quotes.find(q => q.symbol === selectedIndex) ?? {
+      symbol: selectedIndex,
+      price: 0,
+      change: 0,
+      changePercent: 0,
+      trendUp: true,
+    };
 
   const data = chartsData[selectedIndex] || [];
   const trendUp = currentQuote.trendUp;
@@ -145,7 +147,6 @@ const fetchAllQuotes = async () => {
       <View style={{ marginBottom: 20, backgroundColor: '#fffbf5', borderRadius: 12, padding: 10 }}>
         {/* Index Info Row */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          {/* Left: Name & Market */}
           <View>
             <Text style={{ fontSize: 14, fontWeight: '600', color: '#123530' }}>
               {INDEXES.find(i => i.symbol === selectedIndex)?.name}
@@ -155,21 +156,21 @@ const fetchAllQuotes = async () => {
             </Text>
           </View>
 
-          {/* Right: Price & Change */}
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#123530' }}>
               ₹{currentQuote.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
             <Text style={{ fontSize: 12, color: trendUp ? 'green' : 'red' }}>
               {currentQuote.change >= 0 ? '+' : ''}
-              {currentQuote.change.toFixed(2)} ({currentQuote.changePercent >= 0 ? '+' : ''}{currentQuote.changePercent.toFixed(2)}%)
+              {currentQuote.change.toFixed(2)} ({currentQuote.changePercent >= 0 ? '+' : ''}
+              {currentQuote.changePercent.toFixed(2)}%)
             </Text>
           </View>
         </View>
 
         {/* Tabs */}
         <View style={styles.tabsContainer}>
-          {(['1hour', '1D', '5min'] as Interval[]).map(i => (
+          {(['1hour', '5min'] as Interval[]).map(i => (
             <TouchableOpacity
               key={i}
               style={[styles.tabButton, interval === i && styles.tabActive]}
@@ -188,24 +189,35 @@ const fetchAllQuotes = async () => {
           </Canvas>
           <View style={{ marginLeft: 5, justifyContent: 'space-between', height: chartHeight }}>
             <Text style={{ fontSize: 10, color: '#123530' }}>{max.toFixed(2)}</Text>
-            <Text style={{ fontSize: 10, color: '#123530' }}>{max.toFixed(2)}</Text>
-            <Text style={{ fontSize: 10, color: '#123530' }}>{max.toFixed(2)}</Text>
             <Text style={{ fontSize: 10, color: '#123530' }}>{mid.toFixed(2)}</Text>
             <Text style={{ fontSize: 10, color: '#123530' }}>{min.toFixed(2)}</Text>
+            <Text style={{ fontSize: 10, color: '#123530' }}>{mid.toFixed(2)}</Text>
+            <Text style={{ fontSize: 10, color: '#123530' }}>{min.toFixed(2)}</Text>
+            <Text style={{ fontSize: 10, color: '#123530' }}>{mid.toFixed(2)}</Text>
           </View>
         </View>
       </View>
 
       {/* Vertical Index List */}
-      <View style={{ borderWidth: 1, borderColor: '#1235301A', borderRadius: 10, overflow: 'hidden', backgroundColor: '#fffbf5' }}>
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: '#1235301A',
+          borderRadius: 10,
+          overflow: 'hidden',
+          backgroundColor: '#fffbf5',
+          marginBottom: 25,
+        }}
+      >
         {INDEXES.map(index => {
-          const quote = quotes.find(q => q.symbol === index.symbol) ?? {
-            symbol: index.symbol,
-            price: 0,
-            change: 0,
-            changePercent: 0,
-            trendUp: true,
-          };
+          const quote =
+            quotes.find(q => q.symbol === index.symbol) ?? {
+              symbol: index.symbol,
+              price: 0,
+              change: 0,
+              changePercent: 0,
+              trendUp: true,
+            };
           const trend = quote.trendUp;
 
           return (
@@ -213,11 +225,18 @@ const fetchAllQuotes = async () => {
               key={index.symbol}
               style={[
                 styles.indexButton,
-                selectedIndex === index.symbol && { backgroundColor: '#1235301A' },
+                selectedIndex === index.symbol && { backgroundColor: '#f0f0f0' },
               ]}
               onPress={() => setSelectedIndex(index.symbol)}
             >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 10 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  paddingHorizontal: 10,
+                }}
+              >
                 <View>
                   <Text style={{ fontWeight: '600', color: '#123530' }}>{index.name}</Text>
                   <Text style={{ fontSize: 12, color: '#666' }}>{index.market}</Text>
@@ -227,7 +246,9 @@ const fetchAllQuotes = async () => {
                     ₹{quote.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </Text>
                   <Text style={{ fontSize: 12, color: trend ? 'green' : 'red' }}>
-                    {quote.change >= 0 ? '+' : ''}{quote.change.toFixed(2)} ({quote.changePercent >= 0 ? '+' : ''}{quote.changePercent.toFixed(2)}%)
+                    {quote.change >= 0 ? '+' : ''}
+                    {quote.change.toFixed(2)} ({quote.changePercent >= 0 ? '+' : ''}
+                    {quote.changePercent.toFixed(2)}%)
                   </Text>
                 </View>
               </View>
@@ -246,9 +267,10 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 10, color: '#123530', fontWeight: '600' },
   tabTextActive: { color: '#fff' },
   indexButton: {
-    paddingVertical: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1235301A',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#12353003',
   },
 });

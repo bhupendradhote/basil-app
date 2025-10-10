@@ -8,13 +8,16 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '@/services/_api';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import IndexChart from '@/components/dashboard/IndexChart';
 import Chatbot from '../component/Chatbot';
+import MarketMovers from '@/components/dashboard/marketMovers';
+import ForexScreen from '@/components/dashboard/forexScreen';
+import CryptoScreen from '@/components/dashboard/cryptoScreen';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -61,7 +64,6 @@ export default function DashboardScreen() {
       textStyle: styles.titleDaily,
       iconSize: 45,
       onPress: () => router.push('/pages/fundamental/fundamental'),
-
     },
     {
       title: "Today's Outlooks",
@@ -86,7 +88,6 @@ export default function DashboardScreen() {
       textStyle: styles.titleEvents,
       iconSize: 24,
       onPress: () => router.push('/pages/upcomingEvents/upcomingEvents'),
-
     },
     {
       title: 'Calculator',
@@ -148,26 +149,46 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
           ))}
-        </View>
-
-        {/* Indices Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Indices</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View All</Text>
-          </TouchableOpacity>
-        </View>
+        </View>   
 
 
-        <IndexChart />
+{/* Indices Section */}
+<View style={styles.sectionHeader}>
+  <Text style={styles.sectionTitle}>Indices</Text>
+  <TouchableOpacity onPress={() => router.push('/pages/viewAllPages/allIndices')}>
+    <Text style={styles.viewAll}>View All</Text>
+  </TouchableOpacity>
+</View>
+<IndexChart />
 
-        {/* Market Movers */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Market Movers</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View All</Text>
-          </TouchableOpacity>
-        </View>
+{/* Market Movers */}
+<View style={styles.sectionHeader}>
+  <Text style={styles.sectionTitle}>Market Movers</Text>
+  <TouchableOpacity onPress={() => router.push('/pages/viewAllPages/viewAllMarketMovers')}>
+    <Text style={styles.viewAll}>View All</Text>
+  </TouchableOpacity>
+</View>
+<MarketMovers />
+
+{/* Forex and Currencies */}
+<View style={styles.sectionHeader}>
+  <Text style={styles.sectionTitle}>Forex and Currencies</Text>
+  <TouchableOpacity onPress={() => router.push('/pages/viewAllPages/allIndices')}>
+    <Text style={styles.viewAll}>View All</Text>
+  </TouchableOpacity>
+</View>
+<ForexScreen />
+
+{/* Crypto */}
+<View style={styles.sectionHeader}>
+  <Text style={styles.sectionTitle}>Crypto</Text>
+  <TouchableOpacity onPress={() => router.push('/pages/viewAllPages/allIndices')}>
+    <Text style={styles.viewAll}>View All</Text>
+  </TouchableOpacity>
+</View>
+<CryptoScreen />
+
+
       </ScrollView>
 
       {/* Chatbot (floating global assistant) */}

@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   section: {
-    marginBottom: 16,
+    marginBottom: 10,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,

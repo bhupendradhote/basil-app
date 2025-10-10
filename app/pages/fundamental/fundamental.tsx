@@ -13,9 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Theme from '@/constants/theme';
-import { getStockList } from '@/services/_fmpApi';
 import OverviewScreen from '@/app/pages/fundamental/overviewTabScreen';
 import CompanyProfileTabScreen from '@/app/pages/fundamental/companyProfileTabScreen';
 import CorporateActionsScreen from './corporateActionsScreen';
@@ -43,6 +42,8 @@ export default function FundamentalScreen() {
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? Theme.Colors.dark : Theme.Colors.light;
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const symbolFromParams = params.symbol as string | undefined;
 
   const [search, setSearch] = useState('');
   const [stocks, setStocks] = useState<StockItem[]>([]);
@@ -51,18 +52,35 @@ export default function FundamentalScreen() {
   const [activeTab, setActiveTab] = useState('Overview');
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
 
-  // Fetch stock list on mount
+  // Fetch stock list on mount from the same JSON source as watchlist
   useEffect(() => {
     const fetchStocks = async () => {
       try {
         setLoading(true);
-        const data = await getStockList();
-        setStocks(data);
-        if (data.length > 0 && !selectedStock) {
-          setSelectedStock(data[0].symbol);
+        const response = await fetch("https://basilstar.com/data/nse_bse_symbols.json");
+        if (!response.ok) {
+          throw new Error("Failed to fetch stock list");
+        }
+        const data = await response.json();
+        const stockItems = data.map((item: { symbol: string; name: string }) => ({
+          symbol: item.symbol,
+          companyName: item.name,
+        }));
+        setStocks(stockItems);
+
+        // Automatically select the passed symbol if available and exists in the list
+        if (symbolFromParams && stockItems.some((stock: StockItem) => stock.symbol === symbolFromParams)) {
+          setSelectedStock(symbolFromParams);
+          setSearch(''); // Ensure search is cleared
+        } else if (stockItems.length > 0 && !selectedStock) {
+          setSelectedStock(stockItems[0].symbol);
         }
       } catch (err) {
         console.error('Error fetching stock list:', err);
+        // Fallback to first stock if loading fails and no selection
+        if (!selectedStock) {
+          setSelectedStock('RELIANCE'); // Default fallback symbol if needed
+        }
       } finally {
         setLoading(false);
       }
@@ -74,7 +92,7 @@ export default function FundamentalScreen() {
   useEffect(() => {
     if (search.length > 0) {
       const results = stocks.filter(
-        (item) =>
+        (item: StockItem) =>
           item.companyName?.toLowerCase().includes(search.toLowerCase()) ||
           item.symbol?.toLowerCase().includes(search.toLowerCase())
       );
@@ -145,7 +163,7 @@ export default function FundamentalScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.symbol}
-          renderItem={({ item }) => (
+          renderItem={({ item }: { item: StockItem }) => (
             <TouchableOpacity
               style={styles.dropdownItem}
               onPress={() => {
@@ -202,7 +220,6 @@ const styles = StyleSheet.create({
     width: 35,
     alignItems: "center",
     justifyContent: "center",
-
   },
   headerTitle: {
     fontSize: 22,

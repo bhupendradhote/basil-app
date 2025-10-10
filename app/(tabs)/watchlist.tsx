@@ -1,5 +1,6 @@
 // WatchlistScreen.tsx
 import React, { useEffect, useState } from "react";
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,15 +26,17 @@ import api, {
   removeStockFromWatchlist,
   getWatchlistStocks,
 } from "@/services/_api";
-import { getStockList, getQuote } from "@/services/_fmpApi"; // Import stock quote API
+import { getQuote } from "@/services/_fmpApi";
 
 const WatchlistScreen = () => {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<number | null>(null);
   const [watchlists, setWatchlists] = useState<any[]>([]);
   const [stocks, setStocks] = useState<any[]>([]);
   const [allStocks, setAllStocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [stockLoading, setStockLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,6 +48,18 @@ const WatchlistScreen = () => {
 
   // Long press state
   const [longPressedId, setLongPressedId] = useState<number | null>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+
+
+  const handleStockPress = (symbol: string) => {
+  // Navigate to FundamentalScreen and pass symbol as param
+  router.push({
+    pathname: '/pages/fundamental/fundamental', // adjust path if needed
+    params: { symbol },
+  });
+};
 
   // Load watchlists
   const loadWatchlists = async () => {
@@ -60,6 +76,7 @@ const WatchlistScreen = () => {
       }
     } catch (err) {
       console.error("Error loading watchlists", err);
+      Alert.alert("Error", "Failed to load watchlists");
     } finally {
       setLoading(false);
     }
@@ -70,6 +87,11 @@ const WatchlistScreen = () => {
     try {
       setStockLoading(true);
       const symbols = await getWatchlistStocks(watchlistId);
+
+      if (symbols.length === 0) {
+        setStocks([]);
+        return;
+      }
 
       // Fetch current prices for all symbols in the watchlist
       const stockData = await Promise.all(
@@ -105,11 +127,21 @@ const WatchlistScreen = () => {
     }
   };
 
-  // Load FMP stock list
+  // Load stock list from JSON
   const loadAllStocks = async () => {
     try {
-      const data = await getStockList();
-      setAllStocks(data.slice(0, 100)); // Limit to first 100 for performance
+      const response = await fetch("https://basilstar.com/data/nse_bse_symbols.json");
+      if (!response.ok) {
+        throw new Error("Failed to fetch stock list");
+      }
+      const data = await response.json();
+      setAllStocks(
+        data.map((item: any) => ({
+          symbol: item.symbol,
+          companyName: item.name,
+        }))
+      );
+      console.log(`Loaded ${data.length} stocks`);
     } catch (err) {
       console.error("Error loading stock list", err);
       setAllStocks([]);
@@ -120,6 +152,15 @@ const WatchlistScreen = () => {
     loadWatchlists();
     loadAllStocks();
   }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadWatchlists();
+    if (activeTab) {
+      await loadStocks(activeTab);
+    }
+    setRefreshing(false);
+  };
 
   const handleTabPress = (watchlist: any) => {
     setActiveTab(watchlist.id);
@@ -151,10 +192,10 @@ const WatchlistScreen = () => {
       setModalVisible(false);
       setNewWatchlistName("");
       setEditWatchlistId(null);
-      loadWatchlists();
-    } catch (err) {
+      await loadWatchlists();
+    } catch (err: any) {
       console.error("Save Watchlist Error:", err);
-      Alert.alert("Error", "Failed to save watchlist");
+      Alert.alert("Error", err.message || "Failed to save watchlist");
     }
   };
 
@@ -162,6 +203,7 @@ const WatchlistScreen = () => {
     setNewWatchlistName(watchlist.name);
     setEditWatchlistId(watchlist.id);
     setModalVisible(true);
+    setLongPressedId(null);
   };
 
   const handleDeleteWatchlist = (watchlistId: number) => {
@@ -173,30 +215,31 @@ const WatchlistScreen = () => {
         onPress: async () => {
           try {
             await deleteWatchlist(watchlistId);
-            loadWatchlists();
-          } catch (err) {
+            await loadWatchlists();
+          } catch (err: any) {
             console.error("Delete Watchlist Error:", err);
-            Alert.alert("Error", "Failed to delete watchlist");
+            Alert.alert("Error", err.message || "Failed to delete watchlist");
           }
         },
       },
     ]);
   };
 
-  // Add stock to watchlist
+  // Add stock to watchlist - FIXED
   const handleAddStockToWatchlist = async (stock: any) => {
     if (!activeTab) {
-      Alert.alert("Select a watchlist first");
+      Alert.alert("Error", "Please select a watchlist first");
       return;
     }
     try {
       await addStockToWatchlist(activeTab, stock.symbol);
-      Alert.alert("Added", `${stock.symbol} added to watchlist`);
+      Alert.alert("Success", `${stock.symbol} added to watchlist`);
       setStockModalVisible(false);
-      loadStocks(activeTab); // Refresh the stocks list
-    } catch (err) {
+      setSearchQuery("");
+      await loadStocks(activeTab); // Refresh the stocks list
+    } catch (err: any) {
       console.error("Error adding stock to watchlist", err);
-      Alert.alert("Error", "Failed to add stock");
+      Alert.alert("Error", err.message || "Failed to add stock");
     }
   };
 
@@ -212,54 +255,62 @@ const WatchlistScreen = () => {
         onPress: async () => {
           try {
             await removeStockFromWatchlist(activeTab, symbol);
-            loadStocks(activeTab); // Refresh the stocks list
-          } catch (err) {
+            await loadStocks(activeTab); // Refresh the stocks list
+          } catch (err: any) {
             console.error("Error removing stock from watchlist", err);
-            Alert.alert("Error", "Failed to remove stock");
+            Alert.alert("Error", err.message || "Failed to remove stock");
           }
         },
       },
     ]);
   };
 
+  // Filter stocks based on search query
+  const filteredStocks = allStocks.filter(
+    (stock) =>
+      stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      stock.companyName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const renderStock = ({ item }: any) => {
     const isPositive = item.changesPercentage >= 0;
-    const changeColor = isPositive ? "green" : "red";
+    const changeColor = isPositive ? "#4CAF50" : "#F44336";
     const changeSign = isPositive ? "+" : "";
 
     return (
       <TouchableOpacity
         style={styles.stockRow}
+        onPress={() => handleStockPress(item.symbol)}
         onLongPress={() => handleRemoveStock(item.symbol)}
+        delayLongPress={800}
       >
-        <View style={styles.circle} />
+        <View style={styles.circle}>
+          <Text style={styles.circleText}>{item.symbol.charAt(0)}</Text>
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.stockName}>{item.symbol}</Text>
-          <Text style={styles.exchange}>{item.name}</Text>
-        </View>
-        <View style={{ marginLeft: 12, alignItems: 'flex-end' }}>
-          <Text style={styles.price}>${item.price?.toFixed(2)}</Text>
-          <Text style={[styles.change, { color: changeColor }]}>
-            {changeSign}{item.change?.toFixed(2)} ({changeSign}{item.changesPercentage?.toFixed(2)}%)
+          <Text style={styles.exchange} numberOfLines={1}>
+            {item.name}
           </Text>
         </View>
-        <TouchableOpacity
-          style={{ marginLeft: 10 }}
-          onPress={() => handleRemoveStock(item.symbol)}
-        >
-          <Ionicons name="trash-outline" size={20} color="red" />
-        </TouchableOpacity>
+        <View style={{ marginLeft: 12, alignItems: "flex-end" }}>
+          <Text style={styles.price}>
+            ₹{item.price?.toFixed(2) || "0.00"}
+          </Text>
+          <Text style={[styles.change, { color: changeColor }]}>
+            {changeSign}{item.change?.toFixed(2) || "0.00"} ({changeSign}{item.changesPercentage?.toFixed(2) || "0.00"}%)
+          </Text>
+        </View>
       </TouchableOpacity>
     );
   };
 
   const renderFMPStock = ({ item }: any) => (
-    <TouchableOpacity
-      style={styles.fmpStockRow}
-      onPress={() => handleAddStockToWatchlist(item)}
-    >
-      <Text style={{ fontWeight: "600", width: 80 }}>{item.symbol}</Text>
-      <Text style={{ color: "gray", flex: 1 }} numberOfLines={1}>
+    <TouchableOpacity style={styles.fmpStockRow} onPress={() => handleAddStockToWatchlist(item)}>
+      <View style={styles.stockSymbolContainer}>
+        <Text style={styles.stockSymbol}>{item.symbol}</Text>
+      </View>
+      <Text style={styles.stockCompany} numberOfLines={1}>
         {item.companyName}
       </Text>
     </TouchableOpacity>
@@ -268,7 +319,8 @@ const WatchlistScreen = () => {
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="green" />
+        <ActivityIndicator size="large" color="#4CAF50" />
+        <Text style={styles.loadingText}>Loading Watchlists...</Text>
       </View>
     );
   }
@@ -287,30 +339,39 @@ const WatchlistScreen = () => {
 
       <View style={styles.titleContainer}>
         <Text style={styles.title}>My Watchlist</Text>
-        {/* ADD WATCHLIST BUTTON - FIXED POSITION */}
         <TouchableOpacity
           style={styles.addWatchlistButton}
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            setEditWatchlistId(null);
+            setNewWatchlistName("");
+            setModalVisible(true);
+          }}
         >
-          <Ionicons name="add-circle" size={30} color="green" />
+          <Ionicons name="add-circle" size={30} color="#4CAF50" />
         </TouchableOpacity>
       </View>
 
       {/* Tabs Row */}
       <View style={styles.tabRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScrollViewContent}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollViewContent}
+        >
           {watchlists.map((tab) => (
             <View key={tab.id} style={styles.tabWrapper}>
               <TouchableOpacity
                 onPress={() => handleTabPress(tab)}
                 onLongPress={() => handleTabLongPress(tab.id)}
                 style={styles.tab}
+                delayLongPress={800}
               >
                 <Text
                   style={[
                     styles.tabText,
                     activeTab === tab.id && styles.activeTabText,
                   ]}
+                  numberOfLines={1}
                 >
                   {tab.name}
                 </Text>
@@ -320,14 +381,17 @@ const WatchlistScreen = () => {
               {/* Show Edit/Delete only on long press */}
               {longPressedId === tab.id && (
                 <View style={styles.tabActions}>
-                  <TouchableOpacity onPress={() => handleEditWatchlist(tab)}>
-                    <Ionicons name="create-outline" size={18} color="blue" />
+                  <TouchableOpacity
+                    onPress={() => handleEditWatchlist(tab)}
+                    style={styles.tabActionButton}
+                  >
+                    <Ionicons name="create-outline" size={18} color="#2196F3" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDeleteWatchlist(tab.id)}
-                    style={{ marginLeft: 6 }}
+                    style={[styles.tabActionButton, { marginLeft: 8 }]}
                   >
-                    <Ionicons name="trash-outline" size={18} color="red" />
+                    <Ionicons name="trash-outline" size={18} color="#F44336" />
                   </TouchableOpacity>
                 </View>
               )}
@@ -337,32 +401,44 @@ const WatchlistScreen = () => {
       </View>
 
       {/* Stocks List */}
-      {stockLoading ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="green" />
-        </View>
-      ) : (
-        <FlatList
-          data={stocks}
-          renderItem={renderStock}
-          keyExtractor={(item) => item.symbol}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No stocks in this watchlist</Text>
-              <Text style={styles.emptySubText}>
-                Tap the + button to add stocks
-              </Text>
+      <FlatList
+        data={stocks}
+        renderItem={renderStock}
+        keyExtractor={(item) => item.symbol}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#4CAF50"]}
+            tintColor="#4CAF50"
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="list-outline" size={64} color="#CCCCCC" />
+            <Text style={styles.emptyText}>No stocks in this watchlist</Text>
+            <Text style={styles.emptySubText}>Tap the + button below to add stocks</Text>
+          </View>
+        }
+        ListHeaderComponent={
+          stockLoading ? (
+            <View style={styles.stockLoader}>
+              <ActivityIndicator size="small" color="#4CAF50" />
+              <Text style={styles.stockLoadingText}>Updating prices...</Text>
             </View>
-          }
-          contentContainerStyle={{ paddingBottom: 40 }}
-        />
-      )}
+          ) : null
+        }
+        contentContainerStyle={[
+          styles.stocksList,
+          stocks.length === 0 && styles.emptyStocksList,
+        ]}
+      />
 
-      {/* Create/Edit Watchlist Modal (Unchanged) */}
+      {/* Create/Edit Watchlist Modal */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+            <Text style={styles.modalTitle}>
               {editWatchlistId ? "Edit Watchlist" : "Create Watchlist"}
             </Text>
             <TextInput
@@ -370,55 +446,74 @@ const WatchlistScreen = () => {
               value={newWatchlistName}
               onChangeText={setNewWatchlistName}
               style={styles.input}
+              autoFocus
             />
-            <View style={{ flexDirection: "row", marginTop: 10 }}>
-              <TouchableOpacity style={styles.modalBtn} onPress={handleSaveWatchlist}>
-                <Text style={{ color: "#fff" }}>{editWatchlistId ? "Save" : "Create"}</Text>
-              </TouchableOpacity>
+            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: "gray", marginLeft: 10 }]}
+                style={[styles.modalBtn, styles.cancelBtn]}
                 onPress={() => {
                   setModalVisible(false);
                   setEditWatchlistId(null);
                   setNewWatchlistName("");
                 }}
               >
-                <Text style={{ color: "#fff" }}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.saveBtn]} onPress={handleSaveWatchlist}>
+                <Text style={styles.saveBtnText}>{editWatchlistId ? "Save" : "Create"}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Stock Add Modal (Unchanged) */}
+      {/* Stock Add Modal */}
       <Modal visible={stockModalVisible} transparent animationType="slide">
         <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { maxHeight: '80%', width: '90%' }]}>
-            <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
-              Add Stock to Watchlist
-            </Text>
+          <View style={[styles.modalContent, styles.stockModalContent]}>
+            <Text style={styles.modalTitle}>Add Stock to Watchlist</Text>
+
+            <TextInput
+              placeholder="Search stocks..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
+            />
+
             <FlatList
-              data={allStocks}
+              data={filteredStocks}
               renderItem={renderFMPStock}
               keyExtractor={(item) => item.symbol}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              style={{ maxHeight: '80%' }}
+              style={styles.stocksFlatList}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.searchEmptyContainer}>
+                  <Text style={styles.searchEmptyText}>
+                    {searchQuery ? "No stocks found" : "Loading stocks..."}
+                  </Text>
+                </View>
+              }
             />
+
             <TouchableOpacity
-              style={[styles.modalBtn, { marginTop: 10 }]}
-              onPress={() => setStockModalVisible(false)}
+              style={[styles.modalBtn, styles.closeBtn]}
+              onPress={() => {
+                setStockModalVisible(false);
+                setSearchQuery("");
+              }}
             >
-              <Text style={{ color: "#fff" }}>Close</Text>
+              <Text style={styles.closeBtnText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
       {/* Add New Stock Button (Floating) */}
-      <TouchableOpacity style={styles.AddNewButton} onPress={() => setStockModalVisible(true)}>
-        <Ionicons name="add" size={30} color="green" />
-      </TouchableOpacity>
-
+      {watchlists.length > 0 && activeTab && (
+        <TouchableOpacity style={styles.addNewButton} onPress={() => setStockModalVisible(true)}>
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 };
@@ -426,63 +521,302 @@ const WatchlistScreen = () => {
 export default WatchlistScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10 },
-
-  // New container to hold the title and the "Add Watchlist" button
-  titleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  container: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#666666",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 16, // Adjusted padding
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
+  },
+  titleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 10,
     paddingBottom: 5,
   },
-  title: { fontSize: 20, fontWeight: "700", color: "#123530" },
-
-  // New style for the "Add Watchlist" button
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#123530",
+  },
   addWatchlistButton: {
     padding: 5,
   },
-
   tabRow: {
     flexDirection: "row",
     marginHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
-    marginBottom: 16
+    borderBottomColor: "#E0E0E0",
+    marginBottom: 4,
+    marginTop: 12,
   },
   tabsScrollViewContent: {
-    alignItems: 'flex-start', // Ensure tabs start from the left
+    alignItems: "flex-start",
+    paddingRight: 16,
   },
   tabWrapper: {
     alignItems: "center",
-    marginRight: 20,
+    marginRight: 16,
   },
   tab: {
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 2,
   },
-  tabText: { fontSize: 14, color: "gray" },
-  activeTabText: { color: "black", fontWeight: "bold" },
-  activeLine: { height: 2, backgroundColor: "green", marginTop: 4, width: "100%" },
-  tabActions: { flexDirection: "row", marginTop: 4, position: 'absolute', top: 5, right: -40, zIndex: 10 },
-
-  stockRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderColor: "#ddd" },
-  fmpStockRow: { flexDirection: "row", paddingVertical: 10, borderBottomWidth: 0.5, borderColor: "#eee", paddingHorizontal: 8 },
-  circle: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#eee", marginRight: 12 },
-  stockName: { fontWeight: "600", fontSize: 14 },
-  exchange: { fontSize: 12, color: "gray" },
-  price: { fontWeight: "600", fontSize: 14 },
-  change: { fontSize: 12 },
-  modalContainer: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
-  modalContent: { backgroundColor: "#fff", padding: 20, borderRadius: 10, width: "80%" },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 6, padding: 10, marginTop: 10 },
-  modalBtn: { flex: 1, backgroundColor: "green", padding: 10, borderRadius: 6, alignItems: "center" },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyText: { fontSize: 16, color: 'gray', marginBottom: 8 },
-  emptySubText: { fontSize: 14, color: 'lightgray' },
-  AddNewButton: { position: 'absolute', bottom: 100, right: 20, padding: 5, borderWidth: 1, borderColor: 'black', borderRadius: 50 }
+  tabText: {
+    fontSize: 15,
+    color: "#666666",
+    fontWeight: "500",
+  },
+  activeTabText: {
+    color: "#123530",
+    fontWeight: "bold",
+  },
+  activeLine: {
+    height: 3,
+    backgroundColor: "#4CAF50",
+    marginTop: 6,
+    width: "100%",
+    borderRadius: 2,
+  },
+  tabActions: {
+    flexDirection: "row",
+    position: "absolute",
+    top: 8,
+    right: -40,
+    backgroundColor: "#FFFFFF",
+    padding: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabActionButton: {
+    padding: 4,
+  },
+  stocksList: {
+    flexGrow: 1,
+  },
+  emptyStocksList: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  stockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderColor: "#F0F0F0",
+    backgroundColor: "#FFFFFF",
+  },
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 22,
+    backgroundColor: "#E3F2FD",
+    marginRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  circleText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1976D2",
+  },
+  stockName: {
+    fontWeight: "600",
+    fontSize: 14,
+    color: "#123530",
+  },
+  exchange: {
+    fontSize: 11,
+    color: "#666666",
+    marginTop: 2,
+  },
+  price: {
+    fontWeight: "600",
+    fontSize: 14,
+    color: "#123530",
+  },
+  change: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    padding: 24,
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 400,
+  },
+  stockModalContent: {
+    maxHeight: "80%",
+    width: "90%",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 16,
+    color: "#123530",
+    textAlign: "center",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    fontSize: 16,
+    backgroundColor: "#FAFAFA",
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+    backgroundColor: "#FAFAFA",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    marginTop: 20,
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelBtn: {
+    backgroundColor: "#F5F5F5",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  saveBtn: {
+    backgroundColor: "#4CAF50",
+  },
+  closeBtn: {
+    backgroundColor: "#666666",
+    marginTop: 12,
+  },
+  cancelBtnText: {
+    color: "#666666",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  saveBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  closeBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  fmpStockRow: {
+    flexDirection: "row",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: "#F0F0F0",
+    alignItems: "center",
+  },
+  stockSymbolContainer: {
+    width: 80,
+  },
+  stockSymbol: {
+    fontWeight: "600",
+    fontSize: 15,
+    color: "#123530",
+  },
+  stockCompany: {
+    color: "#666666",
+    flex: 1,
+    fontSize: 14,
+  },
+  stocksFlatList: {
+    maxHeight: 400,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: "#666666",
+    marginBottom: 8,
+    marginTop: 16,
+    fontWeight: "500",
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: "#999999",
+    textAlign: "center",
+  },
+  searchEmptyContainer: {
+    padding: 20,
+    alignItems: "center",
+  },
+  searchEmptyText: {
+    fontSize: 16,
+    color: "#666666",
+  },
+  addNewButton: {
+    position: "absolute",
+    bottom: 70,
+    right: 20,
+    backgroundColor: "#4CAF50",
+    width: 45,
+    height: 45,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  stockLoader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    backgroundColor: "#F9F9F9",
+  },
+  stockLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#666666",
+  },
 });
-

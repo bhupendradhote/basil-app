@@ -242,4 +242,129 @@ export const getDividendsCalendar = async (limit: number = 50) => {
 };
 
 
+// Fetch biggest gainers
+export const getBiggestGainers = async () => {
+  try {
+    const response = await fmpApi.get(`/biggest-gainers?apikey=${FMP_API_KEY}`);
+    // Returns an array of objects like: [{symbol, price, name, change, changesPercentage, exchange}, ...]
+    return response.data;
+  } catch (error: any) {
+    console.error('FMP Biggest Gainers API error:', error.message);
+    return [];
+  }
+};
+
+
+// Fetch biggest losers
+export const getBiggestLosers = async () => {
+  try {
+    const response = await fmpApi.get(`/biggest-losers?apikey=${FMP_API_KEY}`);
+    return response.data; // should be array of { symbol, price, name, change, changesPercentage, exchange }
+  } catch (error: any) {
+    console.error('FMP Biggest Losers API error:', error.message);
+    return [];
+  }
+};
+
+// 🌐 FOREX APIs
+export const getForexList = async () => {
+  try {
+    const response = await fmpApi.get(`/forex-list?apikey=${FMP_API_KEY}`);
+    return response.data; // [{symbol, fromCurrency, toCurrency, fromName, toName}, ...]
+  } catch (error: any) {
+    console.error('FMP Forex List API error:', error.message);
+    return [];
+  }
+};
+
+// ✅ Fetch live quote for a forex pair (e.g., EURUSD)
+export const getForexQuote = async (symbol: string) => {
+  if (!symbol) throw new Error('Symbol is required for getForexQuote');
+  try {
+    const response = await fmpApi.get(`/quote?symbol=${symbol}&apikey=${FMP_API_KEY}`);
+    if (!Array.isArray(response.data) || response.data.length === 0)
+      throw new Error(`No forex data found for symbol ${symbol}`);
+    return response.data[0];
+  } catch (error: any) {
+    console.error('FMP Forex Quote API error:', error.message);
+    return null;
+  }
+};
+
+// Fetch crypto list
+export const getCryptoList = async () => {
+  try {
+    const res = await fmpApi.get(`/cryptocurrency-list?apikey=${FMP_API_KEY}`);
+    return res.data;
+  } catch (err: any) {
+    console.error('FMP Crypto List API error:', err.message);
+    return [];
+  }
+};
+
+// Fetch crypto quote
+export const getCryptoQuote = async (symbol: string) => {
+  if (!symbol) throw new Error('Symbol is required for getCryptoQuote');
+  try {
+    const res = await fmpApi.get(`/quote?symbol=${symbol}&apikey=${FMP_API_KEY}`);
+    if (!Array.isArray(res.data) || res.data.length === 0) return null;
+    return res.data[0];
+  } catch (err: any) {
+    console.error('FMP Crypto Quote API error:', err.message);
+    return null;
+  }
+};
+
+export const getForexHistorical = async (symbol: string) => {
+  try {
+    const response = await fmpApi.get(
+      `/historical-price-eod/full?symbol=${symbol}&apikey=${FMP_API_KEY}`
+    );
+    if (!Array.isArray(response.data)) return [];
+    return response.data;
+  } catch (error: any) {
+    console.error('FMP Forex Historical API error:', error.message);
+    return [];
+  }
+};
+
+// named export
+export const getCryptoHistorical = async (symbol: string) => {
+  try {
+    const response = await fmpApi.get(
+      `/historical-price-eod/full?symbol=${symbol}&apikey=${FMP_API_KEY}`
+    );
+    if (!Array.isArray(response.data)) return [];
+    return response.data;
+  } catch (error: any) {
+    console.error('FMP Forex Historical API error:', error.message);
+    return [];
+  }
+};
+
+// ----------------------indexes----------------------------------
+
+export const getAllIndexQuotes = async (): Promise<any[]> => {
+  try {
+    const res = await axios.get(`${FMP_BASE_URL}/batch-index-quotes?apikey=${FMP_API_KEY}`);
+    if (!res.data || !Array.isArray(res.data)) return [];
+    return res.data; // [{symbol, price, change, volume}, ...]
+  } catch (err) {
+    console.error('Error fetching batch index quotes:', err);
+    return [];
+  }
+};
+
+
+// Fetch historical data for an index
+export const getIndexHistorical = async (symbol: string) => {
+  try {
+    const res = await fmpApi.get(`/historical-price-eod/light?symbol=${encodeURIComponent(symbol)}&apikey=${FMP_API_KEY}`);
+    return res.data;
+  } catch (err) {
+    console.error('FMP Index Historical Error:', err);
+    return [];
+  }
+};
+
 export default fmpApi;

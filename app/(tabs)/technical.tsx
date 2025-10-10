@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  FlatList,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -99,6 +102,8 @@ const AdvancedStockAnalysisScreen = () => {
   const [symbols, setSymbols] = useState<StockSymbol[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // API Key
   const FMP_DATA_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
@@ -123,6 +128,15 @@ const AdvancedStockAnalysisScreen = () => {
       console.error('Error loading symbols:', error);
     }
   };
+
+  const getSymbolName = (symbol: string): string => {
+    return symbols.find(s => s.symbol === symbol)?.name || '';
+  };
+
+  const filteredSymbols = symbols.filter(symbol =>
+    symbol.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    symbol.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const analyzeStock = async (symbol: string): Promise<void> => {
     if (!symbol) return;
@@ -516,66 +530,111 @@ const AdvancedStockAnalysisScreen = () => {
     );
   };
 
+  const renderSymbolItem = ({ item }: { item: StockSymbol }) => (
+    <TouchableOpacity
+      style={styles.itemContainer}
+      onPress={() => {
+        setSelectedSymbol(item.symbol);
+        setShowDropdown(false);
+        setSearchQuery('');
+      }}
+    >
+      <Text style={styles.itemText}>{item.name} ({item.symbol})</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <MaterialCommunityIcons name="view-dashboard" size={28} color="#123530" />
-        <TouchableOpacity>
-          <Ionicons name="notifications" size={28} color="#123530" />
-        </TouchableOpacity>
-      </View>
+    <View style={{ flex: 1 }}>
+      <ScrollView style={styles.container}>
+        <View style={styles.headerContainer}>
+          <MaterialCommunityIcons name="view-dashboard" size={28} color="#123530" />
+          <TouchableOpacity>
+            <Ionicons name="notifications" size={28} color="#123530" />
+          </TouchableOpacity>
+        </View>
 
-      <Text style={styles.title}>Technical</Text>
+        <Text style={styles.title}>Technical</Text>
 
-      {/* Stock Selector */}
-      <View style={styles.selectorContainer}>
-        <Text style={styles.selectorLabel}>Select a Stock to Analyze:</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={selectedSymbol}
-            onValueChange={(value: string) => setSelectedSymbol(value)}
-            style={styles.picker}
+        {/* Stock Selector */}
+        <View style={styles.selectorContainer}>
+          <Text style={styles.selectorLabel}>Select a Stock to Analyze:</Text>
+          <View style={styles.pickerContainer}>
+            <TouchableOpacity
+              style={styles.selectedSymbolContainer}
+              onPress={() => setShowDropdown(true)}
+            >
+              <Text style={styles.selectedSymbolText}>
+                {selectedSymbol ? `${getSymbolName(selectedSymbol)} (${selectedSymbol})` : 'Select Symbol'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.analyzeButton}
+            onPress={() => analyzeStock(selectedSymbol)}
+            disabled={loading}
           >
-            {symbols.map((stock: StockSymbol) => (
-              <Picker.Item
-                key={stock.symbol}
-                label={`${stock.name} (${stock.symbol})`}
-                value={stock.symbol}
-              />
-            ))}
-          </Picker>
+            <Text style={styles.analyzeButtonText}>
+              {loading ? 'Analyzing...' : 'Analyze Stock'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.analyzeButton}
-          onPress={() => analyzeStock(selectedSymbol)}
-          disabled={loading}
-        >
-          <Text style={styles.analyzeButtonText}>
-            {loading ? 'Analyzing...' : 'Analyze Stock'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* Loading Indicator */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Analyzing stock data...</Text>
+          </View>
+        )}
 
-      {/* Loading Indicator */}
-      {loading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Analyzing stock data...</Text>
+        {/* Analysis Results */}
+        {analysisData && (
+          <View style={styles.analysisSection}>
+
+            {/* Trade Recommendation */}
+            <Text style={styles.sectionTitle}>Trade Recommendation & Strategy</Text>
+            {renderTradeRecommendation(analysisData.tradeReport)}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Searchable Dropdown Modal */}
+      <Modal
+        visible={showDropdown}
+        onRequestClose={() => setShowDropdown(false)}
+        presentationStyle="overFullScreen"
+        animationType="slide"
+      >
+        <View style={styles.modalContent}>
+          <View style={styles.searchInputContainer}>
+            <TextInput
+              placeholder="Search symbols or names..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
+              autoFocus
+            />
+          </View>
+          <FlatList
+            data={filteredSymbols}
+            keyExtractor={item => item.symbol}
+            renderItem={renderSymbolItem}
+            style={styles.listContainer}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No symbols found</Text>
+            }
+          />
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setShowDropdown(false)}
+          >
+            <Text style={styles.closeButtonText}>Close</Text>
+          </TouchableOpacity>
         </View>
-      )}
-
-      {/* Analysis Results */}
-      {analysisData && (
-        <View style={styles.analysisSection}>
-
-
-          {/* Trade Recommendation */}
-          <Text style={styles.sectionTitle}>Trade Recommendation & Strategy</Text>
-          {renderTradeRecommendation(analysisData.tradeReport)}
-        </View>
-      )}
-    </ScrollView>
+      </Modal>
+    </View>
   );
 };
 
@@ -589,8 +648,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#123530',
-    marginVertical:14,
-
+    marginVertical: 14,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -622,8 +680,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#f8fafc',
   },
-  picker: {
+  selectedSymbolContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     height: 50,
+    paddingHorizontal: 12,
+  },
+  selectedSymbolText: {
+    fontSize: 16,
+    color: '#2d3748',
+    flex: 1,
   },
   analyzeButton: {
     backgroundColor: '#123530',
@@ -750,6 +817,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 20,
+  },
+  // Modal Styles
+  modalContent: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  searchInputContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  searchInput: {
+    height: 50,
+    borderWidth: 0,
+    fontSize: 16,
+    paddingHorizontal: 0,
+    color: '#2d3748',
+  },
+  listContainer: {
+    flex: 1,
+  },
+  itemContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  itemText: {
+    fontSize: 16,
+    color: '#2d3748',
+    flex: 1,
+  },
+  emptyText: {
+    textAlign: 'center',
+    padding: 20,
+    color: '#666',
+    fontSize: 16,
+  },
+  closeButton: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
 

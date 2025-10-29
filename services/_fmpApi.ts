@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
-const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb'; // 🔑 Your API key
+const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
 
 // Axios instance for FMP
 const fmpApi = axios.create({
@@ -266,6 +266,7 @@ export const getBiggestLosers = async () => {
   }
 };
 
+
 // 🌐 FOREX APIs
 export const getForexList = async () => {
   try {
@@ -276,6 +277,7 @@ export const getForexList = async () => {
     return [];
   }
 };
+
 
 // ✅ Fetch live quote for a forex pair (e.g., EURUSD)
 export const getForexQuote = async (symbol: string) => {
@@ -291,6 +293,7 @@ export const getForexQuote = async (symbol: string) => {
   }
 };
 
+
 // Fetch crypto list
 export const getCryptoList = async () => {
   try {
@@ -301,6 +304,7 @@ export const getCryptoList = async () => {
     return [];
   }
 };
+
 
 // Fetch crypto quote
 export const getCryptoQuote = async (symbol: string) => {
@@ -314,6 +318,7 @@ export const getCryptoQuote = async (symbol: string) => {
     return null;
   }
 };
+
 
 export const getForexHistorical = async (symbol: string) => {
   try {

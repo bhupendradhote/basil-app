@@ -8,11 +8,22 @@ import {
   ActivityIndicator,
   Dimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { BarChart, LineChart } from "react-native-chart-kit";
 import { fetchCashFlowStatement, fetchIncomeStatement } from "@/services/_fmpApi";
 
 type CashFlowTabScreenProps = {
   symbol: string;
+};
+
+const USD_TO_INR = 83;
+
+const CHART_COLORS = {
+  operating: "#007AFF",
+  investing: "#FF3B30",
+  financing: "#FFC107",
+  freeCF: "#28A745",
+  netIncome: "#FF5733",
 };
 
 export default function CashFlowTabScreen({ symbol }: CashFlowTabScreenProps) {
@@ -25,144 +36,221 @@ export default function CashFlowTabScreen({ symbol }: CashFlowTabScreenProps) {
       setLoading(true);
       const cashFlow = await fetchCashFlowStatement(symbol);
       const income = await fetchIncomeStatement(symbol);
-
-      setCashFlowData(cashFlow.reverse()); // oldest -> newest
+      setCashFlowData(cashFlow.reverse()); // oldest → newest
       setIncomeData(income.reverse());
       setLoading(false);
     };
-
     fetchData();
   }, [symbol]);
 
   if (loading) {
     return (
-      <View style={styles.loader}>
+      <SafeAreaView style={styles.loader}>
         <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (cashFlowData.length === 0) {
     return (
-      <View style={styles.loader}>
-        <Text>No cash flow data available</Text>
-      </View>
+      <SafeAreaView style={styles.loader}>
+        <Text>No Cash Flow data available</Text>
+      </SafeAreaView>
     );
   }
 
-  const years = cashFlowData.map((item) => item.fiscalYear);
-  const operatingCF = cashFlowData.map((item) => item.netCashProvidedByOperatingActivities / 1_000_000);
-  const investingCF = cashFlowData.map((item) => item.netCashProvidedByInvestingActivities / 1_000_000);
-  const financingCF = cashFlowData.map((item) => item.netCashProvidedByFinancingActivities / 1_000_000);
+  const screenWidth = Dimensions.get("window").width - 32;
 
-  const freeCF = cashFlowData.map((item) => item.freeCashFlow / 1_000_000);
-  const netIncome = incomeData.map((item) => item.netIncome / 1_000_000);
+  // Convert all values to ₹ Crore
+  const toCrore = (value: number | undefined) =>
+    value ? (value * USD_TO_INR) / 1e7 : 0;
+
+  const years = cashFlowData.map((item) => item.fiscalYear);
+  const operatingCF = cashFlowData.map((i) => toCrore(i.netCashProvidedByOperatingActivities));
+  const investingCF = cashFlowData.map((i) => toCrore(i.netCashProvidedByInvestingActivities));
+  const financingCF = cashFlowData.map((i) => toCrore(i.netCashProvidedByFinancingActivities));
+  const freeCF = cashFlowData.map((i) => toCrore(i.freeCashFlow));
+  const netIncome = incomeData.map((i) => toCrore(i.netIncome));
+
+  const formatNumber = (num: number) =>
+    num ? num.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : "-";
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 20 }}>
-      <Text style={styles.title}>Cash Flow Analysis - {symbol}</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text style={styles.title}>Cash Flow Analysis - {symbol}</Text>
 
-      {/* Cash Flow Bar Chart */}
-      <Text style={styles.sectionTitle}>Cash Flow (Operating, Investing, Financing)</Text>
-      <BarChart
-        data={{
-          labels: years,
-          datasets: [
-            { data: operatingCF },
-            { data: investingCF },
-            { data: financingCF },
-          ],
-        }}
-        width={Dimensions.get("window").width - 32}
-        height={220}
-        yAxisLabel="₹"
-        yAxisSuffix="M"
-        chartConfig={{
-          backgroundColor: "#fffbf5",
-          backgroundGradientFrom: "#fffbf5",
-          backgroundGradientTo: "#fffbf5",
-          decimalPlaces: 0,
-          color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-          labelColor: (opacity = 1) => `rgba(0,0,0,${opacity})`,
-        }}
-        style={{ marginVertical: 8, borderRadius: 12 }}
-        fromZero
-        showValuesOnTopOfBars
-      />
-
-      {/* Free Cash Flow vs Net Income Line Chart */}
-      <Text style={styles.sectionTitle}>Free Cash Flow vs Net Income</Text>
-      <LineChart
-        data={{
-          labels: years,
-          datasets: [
-            { data: freeCF, color: () => "#28A745", strokeWidth: 2 },
-            { data: netIncome, color: () => "#FF5733", strokeWidth: 2 },
-          ],
-        }}
-        width={Dimensions.get("window").width - 32}
-        height={220}
-        yAxisLabel="₹"
-        yAxisSuffix="M"
-        chartConfig={{
-          backgroundColor: "#fffbf5",
-          backgroundGradientFrom: "#fffbf5",
-          backgroundGradientTo: "#fffbf5",
-          decimalPlaces: 0,
-          color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
-          labelColor: (opacity = 1) => `rgba(0,0,0,${opacity})`,
-          propsForDots: { r: "4", strokeWidth: "2", stroke: "#007AFF" },
-        }}
-        bezier
-        style={{ marginVertical: 8, borderRadius: 12 }}
-      />
-
-      {/* Data Table */}
-      <Text style={styles.sectionTitle}>Cash Flow Table (All Years)</Text>
-      <View style={styles.table}>
-        <View style={[styles.tableRow, styles.tableHeader]}>
-          <Text style={styles.tableCell}>Year</Text>
-          <Text style={styles.tableCell}>Operating CF (₹M)</Text>
-          <Text style={styles.tableCell}>Investing CF (₹M)</Text>
-          <Text style={styles.tableCell}>Financing CF (₹M)</Text>
-          <Text style={styles.tableCell}>Free CF (₹M)</Text>
-          <Text style={styles.tableCell}>Net Income (₹M)</Text>
-        </View>
-        {cashFlowData.map((item, idx) => (
-          <View key={idx} style={styles.tableRow}>
-            <Text style={styles.tableCell}>{item.fiscalYear}</Text>
-            <Text style={styles.tableCell}>{formatNumber(item.netCashProvidedByOperatingActivities / 1_000_000)}</Text>
-            <Text style={styles.tableCell}>{formatNumber(item.netCashProvidedByInvestingActivities / 1_000_000)}</Text>
-            <Text style={styles.tableCell}>{formatNumber(item.netCashProvidedByFinancingActivities / 1_000_000)}</Text>
-            <Text style={styles.tableCell}>{formatNumber(item.freeCashFlow / 1_000_000)}</Text>
-            <Text style={styles.tableCell}>{formatNumber(netIncome[idx])}</Text>
+        {/* --- Cash Flow Bar Chart --- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Cash Flow Overview (₹ Crore)
+          </Text>
+          <BarChart
+            data={{
+              labels: years,
+              datasets: [
+                { data: operatingCF, color: () => CHART_COLORS.operating },
+                { data: investingCF, color: () => CHART_COLORS.investing },
+                { data: financingCF, color: () => CHART_COLORS.financing },
+              ],
+            }}
+            width={screenWidth}
+            height={250}
+            yAxisLabel="₹"
+            yAxisSuffix=" Cr"
+            fromZero
+            showValuesOnTopOfBars
+            chartConfig={{
+              backgroundGradientFrom: "#f0f0f0",
+              backgroundGradientTo: "#ffffff",
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+              labelColor: () => "#333",
+              barPercentage: 0.8,
+            }}
+            style={styles.chartStyle}
+          />
+          <View style={styles.legendContainer}>
+            <LegendItem color={CHART_COLORS.operating} label="Operating CF" />
+            <LegendItem color={CHART_COLORS.investing} label="Investing CF" />
+            <LegendItem color={CHART_COLORS.financing} label="Financing CF" />
           </View>
-        ))}
-      </View>
-    </ScrollView>
+        </View>
+
+        {/* --- Free Cash Flow vs Net Income --- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Free Cash Flow vs Net Income</Text>
+          <LineChart
+            data={{
+              labels: years,
+              datasets: [
+                {
+                  data: freeCF,
+                  color: () => CHART_COLORS.freeCF,
+                  strokeWidth: 2,
+                },
+                {
+                  data: netIncome,
+                  color: () => CHART_COLORS.netIncome,
+                  strokeWidth: 2,
+                },
+              ],
+              legend: ["Free Cash Flow (₹ Cr)", "Net Income (₹ Cr)"],
+            }}
+            width={screenWidth}
+            height={250}
+            yAxisLabel="₹"
+            yAxisSuffix=" Cr"
+            bezier
+            chartConfig={{
+              backgroundGradientFrom: "#f0f0f0",
+              backgroundGradientTo: "#ffffff",
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+              labelColor: () => "#333",
+              propsForDots: { r: "4", strokeWidth: "2", stroke: "#007AFF" },
+            }}
+            style={styles.chartStyle}
+          />
+          <View style={styles.legendContainer}>
+            <LegendItem color={CHART_COLORS.freeCF} label="Free CF" />
+            <LegendItem color={CHART_COLORS.netIncome} label="Net Income" />
+          </View>
+        </View>
+
+        {/* --- Table --- */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cash Flow Summary (₹ Crore)</Text>
+          <ScrollView horizontal>
+            <View>
+              <View style={[styles.row, styles.headerRow]}>
+                {[
+                  "Year",
+                  "Operating CF",
+                  "Investing CF",
+                  "Financing CF",
+                  "Free CF",
+                  "Net Income",
+                ].map((h) => (
+                  <Text key={h} style={[styles.cell, styles.headerCell]}>
+                    {h}
+                  </Text>
+                ))}
+              </View>
+
+              {cashFlowData.map((item, idx) => (
+                <View style={styles.row} key={idx}>
+                  <Text style={[styles.cell, styles.labelCell]}>
+                    {item.fiscalYear}
+                  </Text>
+                  <Text style={styles.cell}>{formatNumber(operatingCF[idx])}</Text>
+                  <Text style={styles.cell}>{formatNumber(investingCF[idx])}</Text>
+                  <Text style={styles.cell}>{formatNumber(financingCF[idx])}</Text>
+                  <Text style={styles.cell}>{formatNumber(freeCF[idx])}</Text>
+                  <Text style={styles.cell}>{formatNumber(netIncome[idx])}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// Format numbers
-const formatNumber = (num: number) =>
-  num !== undefined && num !== null
-    ? num.toLocaleString("en-US", { maximumFractionDigits: 2 })
-    : "-";
+/** --- Legend Item Component --- */
+const LegendItem = ({ color, label }: { color: string; label: string }) => (
+  <View style={styles.legendItem}>
+    <View style={[styles.legendDot, { backgroundColor: color }]} />
+    <Text style={styles.legendText}>{label}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fffbf5", },
+  container: { flex: 1, backgroundColor: "#fffbf5" },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  title: { fontSize: 18, fontWeight: "700", marginBottom: 12, color: "#123530" },
-  sectionTitle: { fontSize: 16, fontWeight: "600", marginTop: 12, marginBottom: 8 },
-  table: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, overflow: "hidden" },
-  tableRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: "#ccc" },
-  tableHeader: { backgroundColor: "#f0f0f0" },
-  tableCell: { flex: 1, padding: 6, fontSize: 12, textAlign: "center" },
-    section: {
-    marginBottom: 12,
-    backgroundColor: '#1235301A',
-    padding: 12,
-    borderRadius: 12,
-    height: 250, // fixed height for scrollable sections
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 20,
+    color: "#123530",
+    textAlign: "center",
   },
+  section: {
+    marginBottom: 20,
+    borderRadius: 10,
+    padding: 10,
+    backgroundColor: "#12353009",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+    color: "#123530",
+  },
+  chartStyle: { marginVertical: 8, borderRadius: 8 },
+  row: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#ddd" },
+  headerRow: {
+    backgroundColor: "#12353011",
+    borderBottomWidth: 1,
+    borderBottomColor: "#ccc",
+  },
+  cell: {
+    fontSize: 11,
+    color: "#000",
+    minWidth: 100,
+    textAlign: "right",
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  headerCell: { fontWeight: "700", textAlign: "center" },
+  labelCell: { textAlign: "center", fontWeight: "600", color: "#444" },
+  legendContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: 6,
+  },
+  legendItem: { flexDirection: "row", alignItems: "center" },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 5 },
+  legendText: { fontSize: 12, color: "#333" },
 });

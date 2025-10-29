@@ -90,6 +90,10 @@ export default function FundamentalScreen() {
       safeToLower(symbol.name).includes(safeToLower(searchQuery))
   );
 
+  const getAPIPeriod = () => {
+    return selectedPeriod === 'Annual' ? 'annual' : 'quarter';
+  };
+
   const fetchFinancialData = async (symbol: string) => {
     setLoading(true);
     setError(null);
@@ -97,14 +101,18 @@ export default function FundamentalScreen() {
     setAnalysisSummary(null);
 
     try {
+      const period = getAPIPeriod();
+      
       const endpoints = [
-        `https://financialmodelingprep.com/stable/financial-growth?symbol=${symbol}&apikey=${FMP_API_KEY}`,
-        `https://financialmodelingprep.com/stable/cash-flow-statement-growth?symbol=${symbol}&apikey=${FMP_API_KEY}`,
-        `https://financialmodelingprep.com/stable/balance-sheet-statement-growth?symbol=${symbol}&apikey=${FMP_API_KEY}`,
-        `https://financialmodelingprep.com/stable/income-statement-growth?symbol=${symbol}&apikey=${FMP_API_KEY}`,
-        `https://financialmodelingprep.com/stable/ratios?symbol=${symbol}&apikey=${FMP_API_KEY}`,
-        `https://financialmodelingprep.com/stable/key-metrics?symbol=${symbol}&apikey=${FMP_API_KEY}`,
+        `https://financialmodelingprep.com/stable/financial-growth?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
+        `https://financialmodelingprep.com/stable/cash-flow-statement-growth?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
+        `https://financialmodelingprep.com/stable/balance-sheet-statement-growth?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
+        `https://financialmodelingprep.com/stable/income-statement-growth?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
+        `https://financialmodelingprep.com/stable/ratios?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
+        `https://financialmodelingprep.com/stable/key-metrics?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
       ];
+
+      console.log('Fetching data with period:', period);
 
       const responses = await Promise.all(
         endpoints.map(async (url) => {
@@ -115,7 +123,8 @@ export default function FundamentalScreen() {
               return [];
             }
             const json = await res.json();
-            return Array.isArray(json) ? json : (json ? [json] : []);
+            const data = Array.isArray(json) ? json : (json ? [json] : []);
+            return data;
           } catch (err) {
             console.warn(`Failed to fetch ${url}:`, err);
             return [];
@@ -132,6 +141,7 @@ export default function FundamentalScreen() {
         keyMetrics: responses[5] || [],
       };
 
+      console.log('Final financial data:', data);
       setFinancialData(data);
       const summary = generateAnalysisSummary(data);
       setAnalysisSummary(summary);
@@ -141,6 +151,14 @@ export default function FundamentalScreen() {
       console.error('fetchFinancialData error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePeriodChange = async (period: 'Annual' | 'Quarter') => {
+    setSelectedPeriod(period);
+    // Re-fetch data with new period when period changes
+    if (selectedStock) {
+      await fetchFinancialData(selectedStock.symbol);
     }
   };
 
@@ -166,7 +184,6 @@ export default function FundamentalScreen() {
 
     if (absoluteBlacklist.some(b => k.includes(b))) return false;
     if (percentIndicators.some(p => k.includes(p))) return true;
-    // fallback heuristic: very small numbers like 0 < |v| <= 5 are likely ratios (not %), but we handle formatting per value in formatValue
     return false;
   };
 
@@ -177,28 +194,20 @@ export default function FundamentalScreen() {
 
   const formatGrowthValue = (value: number | null | undefined, isPercentage = true) => {
     if (value === null || value === undefined) return 'N/A';
-    // If value seems like decimal fraction (0.12) and isPercentage true => show 12.00%
-    // If value already looks like percent (e.g., 12) but isPercentage true, we try to detect.
-    // We assume the API returns decimals for growth (0.12) in many endpoints.
     const v = Number(value);
     if (isNaN(v)) return 'N/A';
 
-    // If value is small fraction (between -5 and 5) and isPercentage -> treat as fraction and multiply by 100
     if (isPercentage) {
-      const usePercent = Math.abs(v) <= 5; // heuristic
+      const usePercent = Math.abs(v) <= 5;
       const result = usePercent ? (v * 100) : v;
       return `${result.toFixed(2)}%`;
     }
-
-    // absolute value formatting
-    // display with commas and 2 decimals
     return Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const formatValue = (raw: any, key: string) => {
     const num = parseNumber(raw);
     if (num === null) {
-      // if it's not numeric, return original (string)
       return typeof raw === 'string' ? raw : 'N/A';
     }
 
@@ -220,18 +229,16 @@ export default function FundamentalScreen() {
 
     // Percent-like keys
     if (isPercentageKey(key)) {
-      // Some fields may already be in decimals (0.12) or percentages (12)
       const v = num;
       const usePercent = Math.abs(v) <= 5;
       const val = usePercent ? v * 100 : v;
       return `${val.toFixed(2)}%`;
     }
 
-    // Default: if value seems like a ratio (e.g., current ratio), don't multiply
     return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // ---------- Analysis summary ----------
+  // ---------- Analysis summary with period-specific thresholds ----------
   const generateAnalysisSummary = (data: FinancialData): AnalysisSummary => {
     try {
       const latestRatios = (data.ratios && data.ratios.length > 0) ? data.ratios[0] : {};
@@ -239,35 +246,140 @@ export default function FundamentalScreen() {
       const latestIncome = (data.incomeStatementGrowth && data.incomeStatementGrowth.length > 0) ? data.incomeStatementGrowth[0] : {};
       const latestFinancial = (data.financialGrowth && data.financialGrowth.length > 0) ? data.financialGrowth[0] : {};
 
+      // Different thresholds for Annual vs Quarter analysis
+      const isAnnual = selectedPeriod === 'Annual';
+      
+      // Growth thresholds (more lenient for quarterly data)
+      const revenueGrowthThreshold = isAnnual ? 0.08 : 0.02; // 8% annual vs 2% quarterly
+      const netIncomeGrowthThreshold = isAnnual ? 0.06 : 0.01; // 6% annual vs 1% quarterly
+      const revenueDeclineThreshold = isAnnual ? -0.02 : -0.05; // More tolerant of quarterly declines
+      const netIncomeDeclineThreshold = isAnnual ? -0.03 : -0.08; // More tolerant of quarterly declines
+
+      // Ratio thresholds
+      const roeThreshold = isAnnual ? 0.12 : 0.03; // 12% annual vs 3% quarterly
+      const currentRatioGood = isAnnual ? 1.8 : 1.5; // Higher expectation for annual
+      const currentRatioWarning = isAnnual ? 1.2 : 1.0; // More lenient for quarterly
+      const debtToEquitySafe = isAnnual ? 0.8 : 1.0; // More lenient debt for quarterly
+      const debtToEquityHigh = isAnnual ? 1.5 : 2.0; // Higher tolerance for quarterly
+      const grossMarginGood = isAnnual ? 0.35 : 0.25; // Lower expectation for quarterly
+
       const revenueGrowth = parseNumber(latestIncome.growthRevenue) ?? parseNumber(latestFinancial.revenueGrowth) ?? 0;
       const netIncomeGrowth = parseNumber(latestIncome.growthNetIncome) ?? 0;
+      const operatingIncomeGrowth = parseNumber(latestIncome.growthOperatingIncome) ?? 0;
+      const epsGrowth = parseNumber(latestFinancial.epsgrowth) ?? 0;
+      const freeCashFlowGrowth = parseNumber(latestFinancial.freeCashFlowGrowth) ?? 0;
+      
       const roe = parseNumber(latestKeyMetrics.returnOnEquity) ?? 0;
+      const roa = parseNumber(latestKeyMetrics.returnOnAssets) ?? 0;
       const currentRatio = parseNumber(latestRatios.currentRatio) ?? 0;
       const debtToEquity = parseNumber(latestRatios.debtToEquityRatio) ?? parseNumber(latestRatios.debtToEquity) ?? 0;
       const grossMargin = parseNumber(latestRatios.grossProfitMargin) ?? 0;
+      const operatingMargin = parseNumber(latestRatios.operatingProfitMargin) ?? 0;
+      const netMargin = parseNumber(latestRatios.netProfitMargin) ?? 0;
 
       const strengths: string[] = [];
       const weaknesses: string[] = [];
 
-      if (revenueGrowth > 0.1) strengths.push('Strong revenue growth');
-      else if (revenueGrowth < 0) weaknesses.push('Declining revenue');
+      // Revenue Analysis
+      if (revenueGrowth > revenueGrowthThreshold) {
+        strengths.push(`Strong ${isAnnual ? 'annual' : 'quarterly'} revenue growth (${formatGrowthValue(revenueGrowth)})`);
+      } else if (revenueGrowth < revenueDeclineThreshold) {
+        weaknesses.push(`Declining ${isAnnual ? 'annual' : 'quarterly'} revenue (${formatGrowthValue(revenueGrowth)})`);
+      }
 
-      if (netIncomeGrowth > 0.05) strengths.push('Positive net income growth');
-      else if (netIncomeGrowth < -0.05) weaknesses.push('Declining net income');
+      // Net Income Analysis
+      if (netIncomeGrowth > netIncomeGrowthThreshold) {
+        strengths.push(`Positive ${isAnnual ? 'annual' : 'quarterly'} net income growth (${formatGrowthValue(netIncomeGrowth)})`);
+      } else if (netIncomeGrowth < netIncomeDeclineThreshold) {
+        weaknesses.push(`Declining ${isAnnual ? 'annual' : 'quarterly'} net income (${formatGrowthValue(netIncomeGrowth)})`);
+      }
 
-      if (roe > 0.15 || roe > 15) strengths.push('High return on equity');
-      else if (roe < 0.05) weaknesses.push('Low return on equity');
+      // Operating Income Analysis
+      if (operatingIncomeGrowth > netIncomeGrowthThreshold) {
+        strengths.push(`Growing ${isAnnual ? 'annual' : 'quarterly'} operating income (${formatGrowthValue(operatingIncomeGrowth)})`);
+      } else if (operatingIncomeGrowth < netIncomeDeclineThreshold) {
+        weaknesses.push(`Declining ${isAnnual ? 'annual' : 'quarterly'} operating income (${formatGrowthValue(operatingIncomeGrowth)})`);
+      }
 
-      if (currentRatio > 1.5) strengths.push('Strong liquidity position');
-      else if (currentRatio < 1) weaknesses.push('Liquidity concerns');
+      // EPS Growth Analysis
+      if (epsGrowth > netIncomeGrowthThreshold) {
+        strengths.push(`Strong ${isAnnual ? 'annual' : 'quarterly'} EPS growth (${formatGrowthValue(epsGrowth)})`);
+      } else if (epsGrowth < netIncomeDeclineThreshold) {
+        weaknesses.push(`Declining ${isAnnual ? 'annual' : 'quarterly'} EPS (${formatGrowthValue(epsGrowth)})`);
+      }
 
-      if (debtToEquity < 1) strengths.push('Low debt levels');
-      else if (debtToEquity > 2) weaknesses.push('High debt burden');
+      // Free Cash Flow Analysis
+      if (freeCashFlowGrowth > 0.05) {
+        strengths.push(`Growing ${isAnnual ? 'annual' : 'quarterly'} free cash flow (${formatGrowthValue(freeCashFlowGrowth)})`);
+      } else if (freeCashFlowGrowth < -0.1) {
+        weaknesses.push(`Declining ${isAnnual ? 'annual' : 'quarterly'} free cash flow (${formatGrowthValue(freeCashFlowGrowth)})`);
+      }
 
-      if (grossMargin > 0.4 || grossMargin > 40) strengths.push('Healthy gross margins');
+      // Return on Equity Analysis
+      if (roe > roeThreshold) {
+        strengths.push(`Strong ${isAnnual ? 'annual' : 'quarterly'} return on equity (${formatValue(roe, 'roe')})`);
+      } else if (roe < (roeThreshold / 2)) {
+        weaknesses.push(`Low ${isAnnual ? 'annual' : 'quarterly'} return on equity (${formatValue(roe, 'roe')})`);
+      }
 
-      const health = strengths.length > weaknesses.length ? 'Strong' : weaknesses.length > strengths.length ? 'Weak' : 'Moderate';
-      const recommendation = health === 'Strong' ? 'Buy/Hold - Positive fundamentals' : health === 'Weak' ? 'Caution/Sell - Address weaknesses' : 'Hold - Monitor closely';
+      // Return on Assets Analysis
+      if (roa > (roeThreshold * 0.6)) {
+        strengths.push(`Good ${isAnnual ? 'annual' : 'quarterly'} return on assets (${formatValue(roa, 'roa')})`);
+      } else if (roa < (roeThreshold * 0.3)) {
+        weaknesses.push(`Low ${isAnnual ? 'annual' : 'quarterly'} return on assets (${formatValue(roa, 'roa')})`);
+      }
+
+      // Liquidity Analysis
+      if (currentRatio > currentRatioGood) {
+        strengths.push(`Strong ${isAnnual ? 'annual' : 'quarterly'} liquidity position (${formatValue(currentRatio, 'currentRatio')})`);
+      } else if (currentRatio < currentRatioWarning) {
+        weaknesses.push(`${isAnnual ? 'Annual' : 'Quarterly'} liquidity concerns (${formatValue(currentRatio, 'currentRatio')})`);
+      }
+
+      // Debt Analysis
+      if (debtToEquity < debtToEquitySafe) {
+        strengths.push(`Conservative ${isAnnual ? 'annual' : 'quarterly'} debt levels (${formatValue(debtToEquity, 'debtToEquity')})`);
+      } else if (debtToEquity > debtToEquityHigh) {
+        weaknesses.push(`High ${isAnnual ? 'annual' : 'quarterly'} debt burden (${formatValue(debtToEquity, 'debtToEquity')})`);
+      }
+
+      // Margin Analysis
+      if (grossMargin > grossMarginGood) {
+        strengths.push(`Healthy ${isAnnual ? 'annual' : 'quarterly'} gross margins (${formatValue(grossMargin, 'grossMargin')})`);
+      } else if (grossMargin < (grossMarginGood * 0.7)) {
+        weaknesses.push(`Low ${isAnnual ? 'annual' : 'quarterly'} gross margins (${formatValue(grossMargin, 'grossMargin')})`);
+      }
+
+      if (operatingMargin > (grossMarginGood * 0.6)) {
+        strengths.push(`Good ${isAnnual ? 'annual' : 'quarterly'} operating margins (${formatValue(operatingMargin, 'operatingMargin')})`);
+      } else if (operatingMargin < (grossMarginGood * 0.3)) {
+        weaknesses.push(`Low ${isAnnual ? 'annual' : 'quarterly'} operating margins (${formatValue(operatingMargin, 'operatingMargin')})`);
+      }
+
+      if (netMargin > (grossMarginGood * 0.4)) {
+        strengths.push(`Strong ${isAnnual ? 'annual' : 'quarterly'} net profit margins (${formatValue(netMargin, 'netMargin')})`);
+      } else if (netMargin < (grossMarginGood * 0.15)) {
+        weaknesses.push(`Low ${isAnnual ? 'annual' : 'quarterly'} net profit margins (${formatValue(netMargin, 'netMargin')})`);
+      }
+
+      // If no specific strengths/weaknesses found, provide general assessment
+      if (strengths.length === 0 && weaknesses.length === 0) {
+        if (revenueGrowth > 0 || netIncomeGrowth > 0) {
+          strengths.push(`Moderate ${isAnnual ? 'annual' : 'quarterly'} performance with positive growth trends`);
+        } else {
+          weaknesses.push(`Challenging ${isAnnual ? 'annual' : 'quarterly'} period with limited growth`);
+        }
+      }
+
+      const health = strengths.length > weaknesses.length ? 'Strong' : 
+                    weaknesses.length > strengths.length ? 'Weak' : 'Moderate';
+      
+      let recommendation = 'Hold';
+      if (health === 'Strong') {
+        recommendation = strengths.length > (weaknesses.length * 2) ? 'Buy' : 'Buy/Hold';
+      } else if (health === 'Weak') {
+        recommendation = weaknesses.length > (strengths.length * 2) ? 'Sell' : 'Caution/Hold';
+      }
 
       return {
         overallHealth: health,
@@ -279,8 +391,8 @@ export default function FundamentalScreen() {
       console.error('generateAnalysisSummary error:', err);
       return {
         overallHealth: 'Moderate',
-        keyStrengths: [],
-        keyWeaknesses: [],
+        keyStrengths: ['Insufficient data for comprehensive analysis'],
+        keyWeaknesses: ['Limited financial data available'],
         recommendation: 'Hold - insufficient data',
       };
     }
@@ -299,24 +411,21 @@ export default function FundamentalScreen() {
     );
   };
 
-  const getPeriodFilter = () => (selectedPeriod === 'Annual' ? 'FY' : 'Q');
-
   const renderSection = (title: string, data: any[], keys: string[], isPercentage = true, customFormatter?: (key: string, value: any) => any) => {
     if (!data || data.length === 0) {
       return (
         <View style={styles.section} key={title}>
-          <Text style={[styles.sectionTitle, textStyles.subHeading]}>{title}</Text>
+          <Text style={[styles.sectionTitle]}>{title}</Text>
           <Text style={[styles.noDataText, textStyles.caption]}>No data available</Text>
         </View>
       );
     }
 
-    const filteredData = data.filter(item => item && item.period === getPeriodFilter());
-    const latest = filteredData.length > 0 ? filteredData[0] : (data[0] || {});
+    const latest = data[0] || {};
 
     return (
       <View style={styles.section} key={title}>
-        <Text style={[styles.sectionTitle, textStyles.subHeading]}>{title}</Text>
+        <Text style={[styles.sectionTitle]}>{title}</Text>
         {keys.map((key) => {
           const raw = latest[key];
           if (raw === undefined || raw === null) return null;
@@ -388,46 +497,38 @@ export default function FundamentalScreen() {
 
   const renderAnalysisSummary = (summary: AnalysisSummary) => (
     <View style={[styles.section, styles.summarySection]}>
-      <Text style={[styles.sectionTitle, textStyles.heading]}>Analysis Summary</Text>
-      <Text style={[
-        styles.healthText,
-        {
-          color: summary.overallHealth === 'Strong' ? Theme.Colors.light.highlight :
-                 summary.overallHealth === 'Weak' ? '#dc2626' : colors.text
-        },
-        textStyles.heading
-      ]}>
-        Overall Financial Health: {summary.overallHealth}
-      </Text>
-
-      {summary.keyStrengths.length > 0 && (
-        <View style={styles.strengthsWeaknesses}>
-          <Text style={[styles.subTitle, textStyles.subHeading]}>Key Strengths:</Text>
-          {summary.keyStrengths.map((strength, index) => (
-            <Text key={index} style={[styles.listItem, textStyles.paragraph, { color: Theme.Colors.light.highlight }]}>• {strength}</Text>
-          ))}
-        </View>
-      )}
-
-      {summary.keyWeaknesses.length > 0 && (
-        <View style={styles.strengthsWeaknesses}>
-          <Text style={[styles.subTitle, textStyles.subHeading]}>Key Weaknesses:</Text>
-          {summary.keyWeaknesses.map((weakness, index) => (
-            <Text key={index} style={[styles.listItem, textStyles.paragraph, { color: '#dc2626' }]}>• {weakness}</Text>
-          ))}
-        </View>
-      )}
-
       <Text style={[
         styles.recommendationText,
-        textStyles.subHeading,
         {
-          backgroundColor: summary.overallHealth === 'Strong' ? Theme.Colors.light.highlight :
-                           summary.overallHealth === 'Weak' ? '#dc2626' : colors.tint
+          backgroundColor: summary.recommendation.includes('Buy') ? Theme.Colors.light.highlight :
+                           summary.recommendation.includes('Sell') ? '#dc2626' : 
+                           summary.recommendation.includes('Caution') ? '#f59e0b' : colors.tint
         }
       ]}>
-        Recommendation: {summary.recommendation}
+        {summary.recommendation}
       </Text>
+      <Text style={[styles.healthText]}>
+        Overall Financial Health: {summary.overallHealth}
+      </Text>
+      <View style={styles.strengthsWeaknessesSect}>
+        {summary.keyStrengths.length > 0 && (
+          <View style={styles.strengthsWeaknesses}>
+            <Text style={[styles.subTitle, textStyles.subHeading]}>Positive Factors:</Text>
+            {summary.keyStrengths.map((strength, index) => (
+              <Text key={index} style={[styles.listItem, textStyles.paragraph, { color: Theme.Colors.light.highlight }]}>• {strength}</Text>
+            ))}
+          </View>
+        )}
+
+        {summary.keyWeaknesses.length > 0 && (
+          <View style={styles.strengthsWeaknesses}>
+            <Text style={[styles.subTitle, textStyles.subHeading]}>Areas of Concern:</Text>
+            {summary.keyWeaknesses.map((weakness, index) => (
+              <Text key={index} style={[styles.listItem, textStyles.paragraph, { color: '#dc2626' }]}>• {weakness}</Text>
+            ))}
+          </View>
+        )}
+      </View>
     </View>
   );
 
@@ -467,8 +568,8 @@ export default function FundamentalScreen() {
         <View style={styles.searchSection}>
           {/* Hero */}
           <View style={styles.heroSection}>
-            <Text style={[styles.heroTitle, textStyles.heading]}>Comprehensive Stock Growth Analyzer</Text>
-            <Text style={[styles.heroSubtitle, textStyles.paragraph]}>Advanced analysis of Income, Balance Sheet, Cash Flow, Ratios, and Key Metrics.</Text>
+            <Text style={[styles.heroTitle]}>Comprehensive Stock Growth Analyzer</Text>
+            <Text style={[styles.heroSubtitle]}>Advanced analysis of Income, Balance Sheet, Cash Flow, Ratios, and Key Metrics.</Text>
           </View>
 
           {/* Period Selector */}
@@ -483,7 +584,7 @@ export default function FundamentalScreen() {
                     borderColor: colors.icon,
                   },
                 ]}
-                onPress={() => setSelectedPeriod(period as 'Annual' | 'Quarter')}
+                onPress={() => handlePeriodChange(period as 'Annual' | 'Quarter')}
               >
                 <Text
                   style={[
@@ -525,7 +626,6 @@ export default function FundamentalScreen() {
             ) : (
               <>
                 <Text style={[styles.analyzeButtonText, textStyles.subHeading, { color: Theme.Colors.light.background }]}>Analyze Fundamentals</Text>
-                <MaterialIcons name="analytics" size={20} color={Theme.Colors.light.background} style={{ marginLeft: 8 }} />
               </>
             )}
           </TouchableOpacity>
@@ -552,7 +652,7 @@ export default function FundamentalScreen() {
         {/* Results */}
         {financialData && selectedStock && analysisSummary && (
           <View style={styles.resultsSection}>
-            <Text style={[styles.resultsTitle, textStyles.heading]}>{`${selectedStock.name ?? selectedStock.symbol} (${selectedStock.symbol}) - ${selectedPeriod} Fundamentals`}</Text>
+            <Text style={[styles.resultsTitle]}>{`Analysis for ${selectedStock.name ?? selectedStock.symbol} (${selectedStock.symbol}) - ${selectedPeriod}`}</Text>
 
             {renderAnalysisSummary(analysisSummary)}
 
@@ -674,13 +774,13 @@ export default function FundamentalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 35,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -688,8 +788,8 @@ const styles = StyleSheet.create({
   },
   title: {
     marginHorizontal: 0,
-    marginVertical: 16,
-    marginBottom: 26,
+    marginVertical: 10,
+    marginBottom: 16,
   },
   content: {
     flex: 1,
@@ -698,24 +798,28 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   heroSection: {
-    marginBottom: 32,
+    marginBottom: 22,
   },
   heroTitle: {
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+    fontSize: 16,
+    fontWeight: 700,
   },
   heroSubtitle: {
     textAlign: 'center',
+    fontSize: 12,
+    fontWeight: 400,
   },
   periodSelector: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   periodButton: {
     paddingHorizontal: 24,
     paddingVertical: 10,
-    borderRadius: 15,
+    borderRadius: 12,
     borderWidth: 1,
     minWidth: 100,
     marginRight: 12,
@@ -725,6 +829,7 @@ const styles = StyleSheet.create({
   },
   searchSection: {
     borderColor: '#0000000D',
+    borderRadius: 16,
     backgroundColor: '#1235300D',
     padding: 14,
     marginBottom: 24,
@@ -814,25 +919,43 @@ const styles = StyleSheet.create({
   },
   resultsTitle: {
     marginBottom: 16,
+    fontSize: 16,
+    fontWeight: 600,
+    color: '#123530',
+    textAlign: 'center',
   },
   section: {
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 12,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
+    backgroundColor: '#1235300D',
+    padding: 16,
   },
   summarySection: {
-    padding: 16,
-    borderWidth: 1,
+    paddingVertical: 10,
+    padding: 0,
+    textAlign: 'center',
+    backgroundColor: 'transparent',
   },
   sectionTitle: {
-    marginBottom: 12,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+    fontWeight: 700,
   },
   healthText: {
-    fontWeight: '700',
-    marginBottom: 12,
+    fontWeight: '500',
+    marginBottom: 20,
     textAlign: 'center',
+    fontSize: 14,
+  },
+  strengthsWeaknessesSect: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#12353033',
   },
   strengthsWeaknesses: {
     marginBottom: 12,
@@ -846,8 +969,13 @@ const styles = StyleSheet.create({
   recommendationText: {
     textAlign: 'center',
     padding: 12,
-    color: Theme.Colors.light.background,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    color: '#FFFBF5',
+    borderRadius: 10,
+    alignSelf: 'center',
+    marginBottom: 26,
+    fontSize: 15,
+    fontWeight: 400,
   },
   growthItem: {
     flexDirection: 'row',

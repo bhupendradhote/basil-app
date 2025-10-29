@@ -1,178 +1,163 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { getBiggestGainers, getBiggestLosers } from '@/services/_fmpApi'; // ✅ Import both APIs
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 
-type TabType = 'gainers' | 'losers' | 'high52' | 'low52';
-
-export default function ViewAllMarketMovers() {
-  const [selectedTab, setSelectedTab] = useState<TabType>('gainers');
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
-  const [gainers, setGainers] = useState<any[]>([]);
-  const [losers, setLosers] = useState<any[]>([]);
+export default function NSEStocksView() {
+  const [stocks, setStocks] = useState<any[]>([]);
+  const [tab, setTab] = useState<"gainers" | "losers">("gainers");
   const [loading, setLoading] = useState(false);
 
-  const staticData = {
-    high52: [
-      { symbol: 'DEF', name: 'DEF Corp', exchange: 'NYSE', price: 50, change: 0.5, changePercent: 1 },
-      { symbol: 'HIJ', name: 'HIJ Inc.', exchange: 'NASDAQ', price: 75, change: 1.2, changePercent: 1.62 },
-    ],
-    low52: [
-      { symbol: 'LMN', name: 'LMN Ltd.', exchange: 'NYSE', price: 1, change: 0.1, changePercent: 10 },
-      { symbol: 'OPQ', name: 'OPQ Inc.', exchange: 'NASDAQ', price: 0.5, change: 0.05, changePercent: 11 },
-    ],
-  };
+  const FMP_API_KEY = "pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb";
 
-  // ✅ Fetch Top Gainers
-  const fetchGainers = async () => {
+  const fetchNSEStocks = async () => {
     try {
       setLoading(true);
-      const data = await getBiggestGainers();
-      if (Array.isArray(data)) {
-        const mapped = data.slice(0, 10).map((item: any) => ({
-          symbol: item.symbol,
-          name: item.name || item.symbol,
-          exchange: item.exchange || 'N/A',
-          price: parseFloat(item.price) || 0,
-          change: parseFloat(item.change) || 0,
-          changePercent: parseFloat(item.changesPercentage) || 0,
-        }));
-        setGainers(mapped);
-        if (mapped.length > 0) setSelectedSymbol(mapped[0].symbol);
-      }
-    } catch (err) {
-      console.error('Error loading gainers:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // ✅ Fetch Top Losers
-  const fetchLosers = async () => {
-    try {
-      setLoading(true);
-      const data = await getBiggestLosers();
-      if (Array.isArray(data)) {
-        const mapped = data.slice(0, 10).map((item: any) => ({
-          symbol: item.symbol,
-          name: item.name || item.symbol,
-          exchange: item.exchange || 'N/A',
-          price: parseFloat(item.price) || 0,
-          change: parseFloat(item.change) || 0,
-          changePercent: parseFloat(item.changesPercentage) || 0,
-        }));
-        setLosers(mapped);
+      // 1️⃣ Load all symbols
+      const res = await fetch("https://basilstar.com/data/nse_bse_symbols.json");
+      const allStocks = await res.json();
+      if (!Array.isArray(allStocks)) throw new Error("Invalid symbol list");
+
+      // 2️⃣ Filter NSE symbols
+      const nseSymbols = allStocks
+        .filter((s: any) => s.symbol.endsWith(".NS"))
+        .map((s: any) => s.symbol);
+
+      // 3️⃣ Chunk symbols
+      const chunkSize = 100;
+      const chunks: string[][] = [];
+      for (let i = 0; i < nseSymbols.length; i += chunkSize) {
+        chunks.push(nseSymbols.slice(i, i + chunkSize));
       }
-    } catch (err) {
-      console.error('Error loading losers:', err);
+
+      // 4️⃣ Fetch all chunks in parallel
+      const allData = await Promise.all(
+        chunks.map(async (chunk) => {
+          const symbolsStr = chunk.join(",");
+          const resp = await fetch(
+            `https://financialmodelingprep.com/api/v3/quote/${symbolsStr}?apikey=${FMP_API_KEY}`
+          );
+          const data = await resp.json();
+          return Array.isArray(data) ? data : [];
+        })
+      );
+
+      // 5️⃣ Flatten and calculate change & changePercent
+      const allResults = allData
+        .flat()
+        .filter((d: any) => d.price && d.previousClose) // remove invalid
+        .map((d: any) => {
+          const price = parseFloat(d.price);
+          const prev = parseFloat(d.previousClose);
+          const change = price - prev;
+          const changePercent = parseFloat(((change / prev) * 100).toFixed(2));
+          return {
+            symbol: d.symbol,
+            name: d.name || d.symbol,
+            price,
+            change,
+            changePercent,
+          };
+        });
+
+      setStocks(allResults);
+    } catch (error) {
+      console.error("Error fetching NSE data:", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchGainers();
-    fetchLosers();
+    fetchNSEStocks();
   }, []);
 
-  // ✅ Choose which list to show
-  const currentList =
-    selectedTab === 'gainers'
-      ? gainers
-      : selectedTab === 'losers'
-      ? losers
-      : staticData[selectedTab];
+  // 6️⃣ Sort gainers/losers
+  const displayedStocks = React.useMemo(() => {
+    if (tab === "gainers") {
+      return stocks
+        .filter((s) => s.changePercent > 0)
+        .sort((a, b) => b.changePercent - a.changePercent)
+        .slice(0, 100);
+    } else {
+      return stocks
+        .filter((s) => s.changePercent < 0)
+        .sort((a, b) => a.changePercent - b.changePercent) // ascending for biggest losers
+        .slice(0, 100);
+    }
+  }, [stocks, tab]);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 0 }}>
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        {(['gainers', 'losers', 'high52', 'low52'] as TabType[]).map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabButton, selectedTab === tab && styles.tabActive]}
-            onPress={() => {
-              setSelectedTab(tab);
-              const firstItem =
-                tab === 'gainers'
-                  ? gainers[0]
-                  : tab === 'losers'
-                  ? losers[0]
-                  : staticData[tab][0];
-              if (firstItem) setSelectedSymbol(firstItem.symbol);
-            }}
-          >
-            <Text style={[styles.tabText, selectedTab === tab && styles.tabTextActive]}>
-              {tab === 'gainers'
-                ? 'Top Gainers'
-                : tab === 'losers'
-                ? 'Top Losers'
-                : tab === 'high52'
-                ? '52W High'
-                : '52W Low'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.header}>
+        <Text style={styles.title}>NSE Stocks (Top Gainers & Losers)</Text>
       </View>
 
-      {/* List */}
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: '#1235301A',
-          borderRadius: 10,
-          overflow: 'hidden',
-          backgroundColor: '#fffbf5',
-          marginBottom:25,
-        }}
-      >
+      {/* Tabs */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, tab === "gainers" && styles.activeTab]}
+          onPress={() => setTab("gainers")}
+        >
+          <Text
+            style={[styles.tabText, tab === "gainers" && styles.activeTabText]}
+          >
+            Top Gainers
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, tab === "losers" && styles.activeTab]}
+          onPress={() => setTab("losers")}
+        >
+          <Text
+            style={[styles.tabText, tab === "losers" && styles.activeTabText]}
+          >
+            Top Losers
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.listContainer}>
         {loading ? (
-          <ActivityIndicator size="small" color="#123530" style={{ padding: 16 }} />
-        ) : currentList && currentList.length > 0 ? (
-          currentList.map(item => {
+          <ActivityIndicator size="large" color="#123530" style={{ padding: 20 }} />
+        ) : displayedStocks.length > 0 ? (
+          displayedStocks.map((item) => {
             const trend = item.change >= 0;
             return (
-              <TouchableOpacity
-                key={item.symbol}
-                style={[
-                  styles.indexButton,
-                  selectedSymbol === item.symbol && { backgroundColor: '#12353003' },
-                ]}
-                onPress={() => setSelectedSymbol(item.symbol)}
-              >
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    paddingHorizontal: 10,
-                  }}
-                >
-                  <View style={{
-                    width: 170,
-                  }}>
-                    <Text style={{ fontWeight: '600', color: '#123530' }}>{item.name}</Text>
-                    <Text style={{ fontSize: 12, color: '#666' }}>{item.exchange}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontWeight: '600', color: trend ? 'green' : 'red' }}>
-                      $
-                      {item.price.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: trend ? 'green' : 'red' }}>
-                      {item.change >= 0 ? '+' : ''}
-                      {item.change.toFixed(2)} ({item.changePercent >= 0 ? '+' : ''}
-                      {item.changePercent.toFixed(2)}%)
-                    </Text>
-                  </View>
+              <View key={item.symbol} style={styles.stockItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: "600", color: "#123530" }}>
+                    {item.name}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#777" }}>{item.symbol}</Text>
                 </View>
-              </TouchableOpacity>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text
+                    style={{ fontWeight: "700", color: trend ? "green" : "red" }}
+                  >
+                    ₹
+                    {item.price.toLocaleString("en-IN", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: trend ? "green" : "red" }}>
+                    {item.change >= 0 ? "+" : ""}
+                    {item.change.toFixed(2)} ({item.changePercent >= 0 ? "+" : ""}
+                    {item.changePercent.toFixed(2)}%)
+                  </Text>
+                </View>
+              </View>
             );
           })
         ) : (
-          <Text style={{ textAlign: 'center', padding: 16, color: '#999' }}>No data available</Text>
+          <Text style={styles.noData}>No stock data available</Text>
         )}
       </View>
     </ScrollView>
@@ -180,16 +165,34 @@ export default function ViewAllMarketMovers() {
 }
 
 const styles = StyleSheet.create({
-  tabContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10, marginTop: 50 },
-  tabButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#f0f0f0' },
-  tabActive: { backgroundColor: '#5EC385' },
-  tabText: { fontSize: 12, fontWeight: '600', color: '#123530' },
-  tabTextActive: { color: '#fff' },
-  indexButton: {
-    paddingVertical: 18,
+  header: { marginTop: 50, marginBottom: 10, alignItems: "center" },
+  title: { fontSize: 16, fontWeight: "700", color: "#123530" },
+  tabContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderColor: "#ddd",
+    marginBottom: 8,
+  },
+  tabButton: { paddingVertical: 10, paddingHorizontal: 20 },
+  activeTab: { borderBottomWidth: 2, borderBottomColor: "#123530" },
+  tabText: { fontSize: 14, color: "#666" },
+  activeTabText: { color: "#123530", fontWeight: "700" },
+  listContainer: {
+    borderWidth: 1,
+    borderColor: "#1235301A",
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#fffbf5",
+    marginBottom: 25,
+  },
+  stockItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 16,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1235301A',
-    backgroundColor: '#12353003',
+    borderBottomColor: "#1235301A",
   },
+  noData: { textAlign: "center", padding: 16, color: "#999" },
 });

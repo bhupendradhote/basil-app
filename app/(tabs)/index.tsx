@@ -18,6 +18,7 @@ import Chatbot from '../component/Chatbot';
 import MarketMovers from '@/components/dashboard/marketMovers';
 import ForexScreen from '@/components/dashboard/forexScreen';
 import CryptoScreen from '@/components/dashboard/cryptoScreen';
+import DailyTrades from '@/components/dashboard/dailyTrades';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -171,23 +172,30 @@ export default function DashboardScreen() {
 <MarketMovers />
 
 {/* Forex and Currencies */}
-<View style={styles.sectionHeader}>
+{/* <View style={styles.sectionHeader}>
   <Text style={styles.sectionTitle}>Forex and Currencies</Text>
   <TouchableOpacity onPress={() => router.push('/pages/viewAllPages/allIndices')}>
     <Text style={styles.viewAll}>View All</Text>
   </TouchableOpacity>
-</View>
-<ForexScreen />
+</View> */}
+{/* <ForexScreen /> */}
 
 {/* Crypto */}
-<View style={styles.sectionHeader}>
+{/* <View style={styles.sectionHeader}>
   <Text style={styles.sectionTitle}>Crypto</Text>
   <TouchableOpacity onPress={() => router.push('/pages/viewAllPages/allIndices')}>
     <Text style={styles.viewAll}>View All</Text>
   </TouchableOpacity>
-</View>
-<CryptoScreen />
+</View> */}
+{/* <CryptoScreen /> */}
 
+<View style={styles.sectionHeader}>
+  <Text style={styles.sectionTitle}>Daily Trades</Text>
+  <TouchableOpacity onPress={() => router.push('/pages/todaysOutlook/todaysOutlook')}>
+    <Text style={styles.viewAll}>View All</Text>
+  </TouchableOpacity>
+</View>
+<DailyTrades/>
 
       </ScrollView>
 

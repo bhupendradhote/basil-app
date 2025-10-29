@@ -1,0 +1,3 @@
+dynamic trades section belove marcket movers
+web socket integration 
+annual and quarter button not changing in fundamental

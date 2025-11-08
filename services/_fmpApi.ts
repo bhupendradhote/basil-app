@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
-const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
+// const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
+const FMP_API_KEY = '84y12ovhukWyiW2v1MjL4bxx8TXskGOb';
+
 
 // Axios instance for FMP
 const fmpApi = axios.create({

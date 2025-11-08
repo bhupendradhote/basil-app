@@ -39,7 +39,9 @@ interface AnalysisSummary {
   recommendation: string;
 }
 
-const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
+// const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
+const FMP_API_KEY = '84y12ovhukWyiW2v1MjL4bxx8TXskGOb';
+
 
 export default function FundamentalScreen() {
   const colorScheme = useColorScheme();

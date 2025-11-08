@@ -106,7 +106,9 @@ const AdvancedStockAnalysisScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   // API Key
-  const FMP_DATA_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
+  // const FMP_DATA_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
+  const FMP_DATA_API_KEY = '84y12ovhukWyiW2v1MjL4bxx8TXskGOb';
+
 
   useEffect(() => {
     loadSymbols();

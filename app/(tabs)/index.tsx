@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 20, fontWeight: '600', color: '#123530' },
   welcomeName: { fontSize: 18, fontWeight: '400', color: '#5EC385' },
   profileImage: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#ddd' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { fontSize: 20, fontWeight: '500', color: '#123530' },
   viewAll: { fontSize: 14, color: '#5EC385' },
   cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },

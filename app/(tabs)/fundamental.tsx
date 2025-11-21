@@ -42,7 +42,6 @@ interface AnalysisSummary {
 // const FMP_API_KEY = 'pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb';
 const FMP_API_KEY = '84y12ovhukWyiW2v1MjL4bxx8TXskGOb';
 
-
 export default function FundamentalScreen() {
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? Theme.Colors.dark : Theme.Colors.light;
@@ -67,6 +66,20 @@ export default function FundamentalScreen() {
   useEffect(() => {
     loadSymbols();
   }, []);
+
+  // Automatically fetch data when selectedStock changes
+  useEffect(() => {
+    if (selectedStock) {
+      fetchFinancialData(selectedStock.symbol);
+    }
+  }, [selectedStock]);
+
+  // Automatically fetch data when period changes
+  useEffect(() => {
+    if (selectedStock) {
+      fetchFinancialData(selectedStock.symbol);
+    }
+  }, [selectedPeriod]);
 
   const loadSymbols = async () => {
     try {
@@ -114,7 +127,7 @@ export default function FundamentalScreen() {
         `https://financialmodelingprep.com/stable/key-metrics?symbol=${symbol}&period=${period}&apikey=${FMP_API_KEY}`,
       ];
 
-      console.log('Fetching data with period:', period);
+      console.log('Fetching data for:', symbol, 'with period:', period);
 
       const responses = await Promise.all(
         endpoints.map(async (url) => {
@@ -143,7 +156,7 @@ export default function FundamentalScreen() {
         keyMetrics: responses[5] || [],
       };
 
-      console.log('Final financial data:', data);
+      console.log('Final financial data received for period:', period);
       setFinancialData(data);
       const summary = generateAnalysisSummary(data);
       setAnalysisSummary(summary);
@@ -156,12 +169,16 @@ export default function FundamentalScreen() {
     }
   };
 
-  const handlePeriodChange = async (period: 'Annual' | 'Quarter') => {
+  const handlePeriodChange = (period: 'Annual' | 'Quarter') => {
     setSelectedPeriod(period);
-    // Re-fetch data with new period when period changes
-    if (selectedStock) {
-      await fetchFinancialData(selectedStock.symbol);
-    }
+    // Data will be automatically fetched via useEffect
+  };
+
+  const handleStockSelect = (stock: StockSymbol) => {
+    setSelectedStock(stock);
+    setShowSearchModal(false);
+    setSearchQuery('');
+    // Data will be automatically fetched via useEffect
   };
 
   // ---------- Helpers ----------
@@ -537,11 +554,7 @@ export default function FundamentalScreen() {
   const renderSymbolItem = ({ item }: { item: StockSymbol }) => (
     <TouchableOpacity
       style={styles.symbolItem}
-      onPress={() => {
-        setSelectedStock(item);
-        setShowSearchModal(false);
-        setSearchQuery('');
-      }}
+      onPress={() => handleStockSelect(item)}
     >
       <Text style={[styles.symbolText, textStyles.paragraph]}>{`${item.name ?? 'Unknown'} (${item.symbol})`}</Text>
     </TouchableOpacity>
@@ -612,24 +625,6 @@ export default function FundamentalScreen() {
             <Text style={[styles.searchPlaceholder, textStyles.paragraph]}>
               {selectedStock ? `${selectedStock.name ?? 'Unknown'} (${selectedStock.symbol})` : 'Search for a stock...'}
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.analyzeButton,
-              (!selectedStock || loading) && styles.disabledButton,
-              { backgroundColor: Theme.Colors.light.tint }
-            ]}
-            onPress={() => selectedStock && fetchFinancialData(selectedStock.symbol)}
-            disabled={!selectedStock || loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={Theme.Colors.light.background} />
-            ) : (
-              <>
-                <Text style={[styles.analyzeButtonText, textStyles.subHeading, { color: Theme.Colors.light.background }]}>Analyze Fundamentals</Text>
-              </>
-            )}
           </TouchableOpacity>
         </View>
 
@@ -855,21 +850,6 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: {
     flex: 1,
-  },
-  analyzeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    gap: 8,
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  analyzeButtonText: {
-    textTransform: 'uppercase',
   },
   placeholderSection: {
     marginBottom: 24,

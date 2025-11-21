@@ -546,60 +546,66 @@ const AdvancedStockAnalysisScreen = () => {
   );
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView style={styles.container}>
-        <View style={styles.headerContainer}>
-          <MaterialCommunityIcons name="view-dashboard" size={28} color="#123530" />
-          <TouchableOpacity>
-            <Ionicons name="notifications" size={28} color="#123530" />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.title}>Technical</Text>
-
-        {/* Stock Selector */}
-        <View style={styles.selectorContainer}>
-          <Text style={styles.selectorLabel}>Select a Stock to Analyze:</Text>
-          <View style={styles.pickerContainer}>
-            <TouchableOpacity
-              style={styles.selectedSymbolContainer}
-              onPress={() => setShowDropdown(true)}
-            >
-              <Text style={styles.selectedSymbolText}>
-                {selectedSymbol ? `${getSymbolName(selectedSymbol)} (${selectedSymbol})` : 'Select Symbol'}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#666" />
+    <View style={styles.mainContainer}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+      >
+        <View style={styles.container}>
+          <View style={styles.headerContainer}>
+            <MaterialCommunityIcons name="view-dashboard" size={28} color="#123530" />
+            <TouchableOpacity>
+              <Ionicons name="notifications" size={28} color="#123530" />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.analyzeButton}
-            onPress={() => analyzeStock(selectedSymbol)}
-            disabled={loading}
-          >
-            <Text style={styles.analyzeButtonText}>
-              {loading ? 'Analyzing...' : 'Analyze Stock'}
-            </Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>Technical</Text>
+
+          {/* Stock Selector */}
+          <View style={styles.selectorContainer}>
+            <Text style={styles.selectorLabel}>Select a Stock to Analyze:</Text>
+            <View style={styles.pickerContainer}>
+              <TouchableOpacity
+                style={styles.selectedSymbolContainer}
+                onPress={() => setShowDropdown(true)}
+              >
+                <Text style={styles.selectedSymbolText}>
+                  {selectedSymbol ? `${getSymbolName(selectedSymbol)} (${selectedSymbol})` : 'Select Symbol'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.analyzeButton}
+              onPress={() => analyzeStock(selectedSymbol)}
+              disabled={loading}
+            >
+              <Text style={styles.analyzeButtonText}>
+                {loading ? 'Analyzing...' : 'Analyze Stock'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Loading Indicator */}
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.loadingText}>Analyzing stock data...</Text>
+            </View>
+          )}
+
+          {/* Analysis Results */}
+          {analysisData && (
+            <View style={styles.analysisSection}>
+
+              {/* Trade Recommendation */}
+              <Text style={styles.sectionTitle}>Trade Recommendation & Strategy</Text>
+              {renderTradeRecommendation(analysisData.tradeReport)}
+            </View>
+          )}
         </View>
-
-        {/* Loading Indicator */}
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Analyzing stock data...</Text>
-          </View>
-        )}
-
-        {/* Analysis Results */}
-        {analysisData && (
-          <View style={styles.analysisSection}>
-
-            {/* Trade Recommendation */}
-            <Text style={styles.sectionTitle}>Trade Recommendation & Strategy</Text>
-            {renderTradeRecommendation(analysisData.tradeReport)}
-          </View>
-        )}
       </ScrollView>
 
       {/* Searchable Dropdown Modal */}
@@ -641,10 +647,21 @@ const AdvancedStockAnalysisScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#fffbf5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: '#fffbf5',
     padding: 16,
+    marginBottom: 100,
   },
   title: {
     fontSize: 22,

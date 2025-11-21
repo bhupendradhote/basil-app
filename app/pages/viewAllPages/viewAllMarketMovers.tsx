@@ -13,7 +13,9 @@ export default function NSEStocksView() {
   const [tab, setTab] = useState<"gainers" | "losers">("gainers");
   const [loading, setLoading] = useState(false);
 
-  const FMP_API_KEY = "pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb";
+  // const FMP_API_KEY = "pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb";
+const FMP_API_KEY = '84y12ovhukWyiW2v1MjL4bxx8TXskGOb';
+
 
   const fetchNSEStocks = async () => {
     try {

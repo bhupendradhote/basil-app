@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-type TabType = "gainers" | "losers" | "high52" | "low52";
+type TabType = "gainers" | "losers";
 
 export default function MarketMovers() {
   const [selectedTab, setSelectedTab] = useState<TabType>("gainers");
@@ -17,19 +17,7 @@ export default function MarketMovers() {
   const [losers, setLosers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // FMP key (keep secure in production)
-  const FMP_API_KEY = "pNfPaAqCCLW5TIyeNfmbJ9CaocjvSfNb";
-
-  const staticData = {
-    high52: [
-      { symbol: "DEF", name: "DEF Corp", exchange: "NSE", price: 50, change: 0.5, changePercent: 1 },
-      { symbol: "HIJ", name: "HIJ Inc.", exchange: "NSE", price: 75, change: 1.2, changePercent: 1.62 },
-    ],
-    low52: [
-      { symbol: "LMN", name: "LMN Ltd.", exchange: "NSE", price: 1, change: 0.1, changePercent: 10 },
-      { symbol: "OPQ", name: "OPQ Inc.", exchange: "NSE", price: 0.5, change: 0.05, changePercent: 11 },
-    ],
-  };
+  const FMP_API_KEY = '84y12ovhukWyiW2v1MjL4bxx8TXskGOb';
 
   // helper: chunk array
   const chunkArray = (arr: string[], size: number) => {
@@ -44,12 +32,10 @@ export default function MarketMovers() {
     try {
       setLoading(true);
 
-      // 1) Load symbol list
       const res = await fetch("https://basilstar.com/data/nse_bse_symbols.json");
       const allStocks = await res.json();
       if (!Array.isArray(allStocks)) throw new Error("Invalid symbol list");
 
-      // 2) Keep only .NS symbols
       const nseSymbols = allStocks
         .filter((s: any) => typeof s.symbol === "string" && s.symbol.endsWith(".NS"))
         .map((s: any) => s.symbol);
@@ -61,11 +47,9 @@ export default function MarketMovers() {
         return;
       }
 
-      // 3) Chunk (FMP allows many symbols; be conservative)
       const chunkSize = 100;
       const chunks = chunkArray(nseSymbols, chunkSize);
 
-      // 4) Fetch all chunks in parallel
       const allResponses = await Promise.all(
         chunks.map(async (chunk) => {
           const symbolsStr = chunk.join(",");
@@ -83,15 +67,14 @@ export default function MarketMovers() {
         })
       );
 
-      // 5) Flatten & sanitize
       const flat = allResponses.flat();
 
       const mapped = flat
         .filter((d: any) => {
-          // require numeric price & previousClose and previousClose not zero
           return (
             d &&
-            (d.price !== undefined && d.previousClose !== undefined) &&
+            d.price !== undefined &&
+            d.previousClose !== undefined &&
             !isNaN(Number(d.price)) &&
             !isNaN(Number(d.previousClose)) &&
             Number(d.previousClose) !== 0
@@ -112,7 +95,6 @@ export default function MarketMovers() {
           };
         });
 
-      // 6) Build gainers (top +) and losers (most negative)
       const gainersSorted = [...mapped]
         .filter((x) => x.changePercent > 0)
         .sort((a, b) => b.changePercent - a.changePercent)
@@ -120,13 +102,12 @@ export default function MarketMovers() {
 
       const losersSorted = [...mapped]
         .filter((x) => x.changePercent < 0)
-        .sort((a, b) => a.changePercent - b.changePercent) // ascending (most negative first)
+        .sort((a, b) => a.changePercent - b.changePercent)
         .slice(0, 10);
 
       setGainers(gainersSorted);
       setLosers(losersSorted);
 
-      // set default selected symbol
       const first =
         gainersSorted.length > 0 ? gainersSorted[0] : losersSorted.length > 0 ? losersSorted[0] : null;
       setSelectedSymbol(first ? first.symbol : null);
@@ -142,36 +123,28 @@ export default function MarketMovers() {
 
   useEffect(() => {
     fetchAllNSEQuotes();
-    // optionally poll every X seconds: uncomment below (careful with API limits)
-    // const iv = setInterval(fetchAllNSEQuotes, 60_000);
-    // return () => clearInterval(iv);
   }, []);
 
-  // pick list to display based on tab
   const currentList = useMemo(() => {
-    if (selectedTab === "gainers") return gainers;
-    if (selectedTab === "losers") return losers;
-    return staticData[selectedTab];
+    return selectedTab === "gainers" ? gainers : losers;
   }, [selectedTab, gainers, losers]);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 0 }}>
       {/* Tabs */}
       <View style={styles.tabContainer}>
-        {(["gainers", "losers", "high52", "low52"] as TabType[]).map((tab) => (
+        {(["gainers", "losers"] as TabType[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tabButton, selectedTab === tab && styles.tabActive]}
             onPress={() => {
               setSelectedTab(tab);
-              // set default selected symbol for that tab
-              const firstItem =
-                tab === "gainers" ? gainers[0] : tab === "losers" ? losers[0] : staticData[tab][0];
+              const firstItem = tab === "gainers" ? gainers[0] : losers[0];
               if (firstItem) setSelectedSymbol(firstItem.symbol);
             }}
           >
             <Text style={[styles.tabText, selectedTab === tab && styles.tabTextActive]}>
-              {tab === "gainers" ? "Top Gainers" : tab === "losers" ? "Top Losers" : tab === "high52" ? "52W High" : "52W Low"}
+              {tab === "gainers" ? "Top Gainers" : "Top Losers"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -204,9 +177,7 @@ export default function MarketMovers() {
                       ₹{Number(item.price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Text>
                     <Text style={{ fontSize: 12, color: trend ? "green" : "red" }}>
-                      {item.change >= 0 ? "+" : ""}
-                      {item.change.toFixed(2)} ({item.changePercent >= 0 ? "+" : ""}
-                      {item.changePercent.toFixed(2)}%)
+                      {item.change >= 0 ? "+" : ""}{item.change.toFixed(2)} ({item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%)
                     </Text>
                   </View>
                 </View>
@@ -223,7 +194,7 @@ export default function MarketMovers() {
 
 const styles = StyleSheet.create({
   tabContainer: { flexDirection: "row", justifyContent: "space-around", marginBottom: 12 },
-  tabButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: "#f0f0f0" },
+  tabButton: { paddingVertical: 8, paddingHorizontal: 47, borderRadius: 12, backgroundColor: "#f0f0f0" },
   tabActive: { backgroundColor: "#5EC385" },
   tabText: { fontSize: 12, fontWeight: "600", color: "#123530" },
   tabTextActive: { color: "#fff" },
